@@ -1,0 +1,158 @@
+# S2.3 — DebateAgent & Conviction Engine
+
+## Objective
+This is where the system stops being three voices and becomes a decision. The `DebateAgent`
+is state-aware: it knows the current position, the entry thesis, and how long it has been
+held, then runs a structured four-step Bull-vs-Bear argument over the four analyst signals
+(News, Macro, Technical, Memory) and the `PortfolioState`. Crucially it is framed as a
+*position manager*, not a daily classifier — it asks "is the original thesis still valid?"
+and is biased to continuity, preferring `hold` unless there is clear contradicting evidence.
+It returns a `ResearchStance` with `action ∈ {hold, open, close, flip}`. But its self-reported
+`conviction` is *not* trusted — LLMs are overconfident and inconsistent. So the second half
+of this sub-step is the conviction engine in `src/eval/calibration.py`, which **computes**
+conviction from math, in two layers: Layer 1 (`composite_conviction`) blends measurable
+signals — agent agreement, mean confidence, and memory consistency; Layer 2
+(`self_consistency_conviction`) samples the DebateAgent K times at `temperature>0` and asks
+how often it lands on the majority action. `raw_conviction` combines both into a raw score
+`z`. The headline: the LLM supplies direction + reasoning; the decision number comes from
+math. (Layer 3 — calibrating `z` into a true probability — is Step 5, since it needs history.)
+
+## Inputs and Outputs
+- **Inputs**
+  - The four analyst signals (`NewsSignal`, `MacroSignal`, `TechnicalSignal`, `MemoryContext`)
+    + `PortfolioState`; `Observation` for `{t}`.
+  - `make_llm(config)`; `config` (`K`, `w1/w2/w3`, `alpha/beta`, `ticker`, `temperature` — the
+    DebateAgent overrides to `>0` for Layer-2 sampling).
+- **Outputs**
+  - `src/agents/debate.py` → `DebateAgent.run(...) -> ResearchStance`
+    (bull_case, bear_case, thesis_still_valid, action, target_direction, conviction);
+    plus a `sample(...)` path that produces the K actions for self-consistency.
+  - Conviction engine (`src/eval/calibration.py`):
+    - `composite_conviction(signals, memory_consistency, config) -> float` (Layer 1, 0–1).
+    - `self_consistency_conviction(actions, K) -> float` (Layer 2, majority frequency).
+    - `raw_conviction(conviction_raw, conviction_sc, config) -> float` (combined `z`, 0–1).
+  - `tests/test_agents.py` (DebateAgent prefers `hold` when held thesis stays valid) +
+    conviction unit tests. Layer-3 `fit_calibrator`/`reliability_diagram` are **Step 5**.
+
+## Skeleton Python Code
+```python
+"""src/agents/debate.py — state-aware Bull/Bear debate (Template Method)."""
+from __future__ import annotations
+
+from src.agents.base import BaseAgent
+from src.data.loaders import Observation
+from src.schemas import (NewsSignal, MacroSignal, TechnicalSignal, MemoryContext,
+                         ResearchStance, PortfolioState)
+
+DEBATE_SYSTEM = """You moderate a position-management debate for the asset {ticker}. Current
+position {current_position} (-1 short, 0 flat, +1 long); entry thesis: "{active_thesis}";
+held {days_held} sessions. Use ONLY the signals provided (no outside/future knowledge). Work in order:
+  Step 1 - Bull case: the strongest GENUINE argument to be long, citing the signals.
+  Step 2 - Bear case: the strongest GENUINE argument to be short/flat. Steelman both; never strawman.
+  Step 3 - Thesis check: is the ORIGINAL entry thesis still valid today? (true/false + why).
+  Step 4 - Recommend action in {{hold, open, close, flip}} and target_direction in {{-1,0,1}}.
+Bias to continuity: if a position is held and its thesis still holds, prefer HOLD unless there is
+clear, specific contradicting evidence; only flip on strong opposing evidence.
+Also return conviction in [0,1] = probability the recommended action is correct over ~5 sessions;
+be honest, not strategic — the final decision number is recomputed downstream from math."""
+DEBATE_HUMAN = """Date: {t}
+PortfolioState: position={current_position}, thesis="{active_thesis}", days_held={days_held}
+NewsSignal: {news}
+MacroSignal: {macro}
+TechnicalSignal: {technical}
+MemoryContext: {memory}"""
+
+
+class DebateAgent(BaseAgent):
+    """State-aware Bull/Bear moderator → ResearchStance. Sampled K times for self-consistency."""
+
+    def _build_chain(self):
+        """Return ChatPromptTemplate.from_messages([DEBATE_SYSTEM, DEBATE_HUMAN])
+        | self.llm.with_structured_output(ResearchStance)."""
+        ...
+
+    def run(self, obs: Observation, state: PortfolioState, news: NewsSignal,
+            macro: MacroSignal, technical: TechnicalSignal,
+            memory: MemoryContext) -> ResearchStance:
+        """Render the four signals + PortfolioState into the prompt and invoke once (temp=0)."""
+        ...
+
+    def sample(self, obs: Observation, state: PortfolioState, news: NewsSignal,
+               macro: MacroSignal, technical: TechnicalSignal,
+               memory: MemoryContext, k: int) -> list[str]:
+        """Invoke the chain k times at temperature>0 (varying evidence order) and return the
+        list of recommended `action`s — the input to self_consistency_conviction."""
+        ...
+```
+
+```python
+"""src/eval/calibration.py — conviction engine (Layers 1-2; Layer 3 = Step 5)."""
+from __future__ import annotations
+
+from config import Config
+
+
+def composite_conviction(signals: list[dict], memory_consistency: float, config: Config) -> float:
+    """Layer 1 — blend measurable quantities into conviction_raw (0–1), NOT the LLM's self-report.
+
+    `signals` = the directional agent outputs, each {direction: -1|0|+1, confidence: 0..1}.
+    Computes: agreement = |Σ sᵢcᵢ| / Σ cᵢ  (guard Σcᵢ==0 → 0),
+              mean_confidence = mean(cᵢ),
+              and folds in memory_consistency (share of retrieved analogs that supported the action).
+    Returns w1·agreement + w2·mean_confidence + w3·memory_consistency  (weights from config, Σw=1)."""
+    ...
+
+
+def self_consistency_conviction(actions: list[str], K: int) -> float:
+    """Layer 2 — turn a fuzzy judgment into a frequency.
+
+    `actions` = the K actions the DebateAgent produced when asked the same question K times at
+    temperature>0. Returns (count of the most common action) / K — high = stable/confident,
+    low = wavering. Example: ['open','open','open','hold','open'] → 0.8."""
+    ...
+
+
+def raw_conviction(conviction_raw: float, conviction_sc: float, config: Config) -> float:
+    """Combine Layers 1 and 2 into the raw score z = alpha·conviction_raw + beta·conviction_sc
+    (alpha, beta from config). z is a 0–1 score; it becomes a true probability only after the
+    Step-5 calibrator maps it via P(correct | z)."""
+    ...
+```
+
+## How It Connects
+By the time the DebateAgent runs, the three analysts and the memory layer have each emitted
+a typed signal; the DebateAgent gathers them plus the `PortfolioState`, renders them into its
+four-step prompt, and (through the same `make_llm` brain and `with_structured_output(ResearchStance)`
+contract) returns a `ResearchStance` saying hold/open/close/flip. The conviction engine then
+ignores the stance's *self-reported* conviction and rebuilds trust from math: it casts the
+analyst signals as direction-and-confidence votes into `composite_conviction` for Layer 1,
+re-invokes the DebateAgent K times at `temperature>0` and feeds the resulting action list to
+`self_consistency_conviction` for Layer 2, and folds the two together via `raw_conviction`
+into a single raw score `z`. That `z` is the clean number Step 3's PositionManager will threshold
+against the τ knobs — and Step 5 will calibrate into a real probability — which is why the whole
+design insists the LLM contributes only direction and reasoning while the decision number is
+computed, not confessed.
+
+## Key Technology, Design Patterns & Packages
+- **Template Method (`BaseAgent`)** — the DebateAgent reuses the same `_build_chain`/`run`
+  lifecycle as the analysts, adding a `sample` path for K-shot self-consistency.
+- **Strategy** — the two conviction layers are independent strategies (`composite_conviction`,
+  `self_consistency_conviction`) combined by `raw_conviction`; weights/blend live in `config`.
+- **LangChain LCEL + `with_structured_output(ResearchStance)`** — structured debate output,
+  no hand-parsing; the DebateAgent overrides temperature to `>0` only for Layer-2 sampling.
+- **Pure functions over math, not LLM self-report** — conviction is computed; randomness lives
+  only in the LLM layer, keeping the conviction functions deterministic and unit-testable.
+- **Pydantic (`ResearchStance`)** — typed, validated decision contract carrying both the
+  bull/bear narrative (for the explainability trace) and the recommended action.
+- **Why:** decouples "what direction" (LLM) from "how sure" (math), so thresholds later mean
+  probabilities; Layer 3 (isotonic/Platt calibration) is deferred to Step 5 (needs history).
+
+## Definition of Done
+- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_agents.py -k debate -q` (DebateAgent → F08) and `.venv/bin/python -m pytest tests/test_calibration.py -k conviction -q` (conviction Layers 1–2) both green.
+- [ ] **Tests (offline & deterministic):** with `Config(offline=True)` (MockLLM + `fixtures/llm_responses.json`), `DebateAgent.run(...)` fuses the four signals + `PortfolioState` into a valid `ResearchStance` (bull_case, bear_case, thesis_still_valid, `action ∈ {hold, open, close, flip}`, target_direction, conviction).
+- [ ] **DebateAgent behavior:** "prefers **hold** when a held position's thesis stays valid" check passes (continuity bias); `sample(..., k)` returns a list of K actions for self-consistency.
+- [ ] **Conviction math unit tests:** `composite_conviction` = w1·agreement + w2·mean_confidence + w3·memory_consistency (weights from config), with the all-zero-confidence divide-by-zero guard → 0; `self_consistency_conviction(actions, K)` = majority frequency (e.g. `['open','open','open','hold','open']` → 0.8); `raw_conviction` = α·raw + β·sc — all pure/deterministic.
+- [ ] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e).
+- [ ] **features.json:** F08 → `passing` with evidence; conviction Layers 1–2 land here but F15 (calibration) stays `not_started` until the Step-5 Layer-3 calibrator.
+- [ ] **Rules:** LCEL `prompt | llm.with_structured_output(ResearchStance)` (never hand-parse JSON); model via `make_llm`; conviction is **MATH, not the LLM's self-report** (the stance's `conviction` field is one input, never the decision number); `temperature=0` for `run`, `temperature>0` only in `sample` for self-consistency (config-driven `K`); offline parity (no `config.offline` branch); no hardcoded `"AAPL"`; weights/`K`/`alpha`/`beta` only in config.
+- [ ] **Tracking:** `PROGRESS.md` updated; note the planned `reasoning`-first schema reorder applies to `ResearchStance` too.

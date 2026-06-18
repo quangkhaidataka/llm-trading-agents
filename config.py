@@ -41,6 +41,8 @@ class Config:
     h: int = 5                             # forward-return / delayed-write window
     k: int = 5                             # top-k episodes retrieved
     embedding_model: str = "all-MiniLM-L6-v2"
+    reward_benchmark: str = "aapl_drift"   # reward = sign(action)·(fwd − benchmark); "raw" | "aapl_drift"
+    reward_drift_window: int = 60          # trailing sessions for μ (AAPL drift), point-in-time ≤ t
 
     # ── Hysteresis thresholds (on CALIBRATED conviction; tuned §7.2) ─────────
     tau_enter: float = 0.70

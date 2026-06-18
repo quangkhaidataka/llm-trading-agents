@@ -17,6 +17,33 @@ Template:
 
 ---
 
+## ADR-002 · Memory reward = AAPL-drift-demeaned return, not SPY-adjusted (corrects spec §7.1)
+- **Date:** 2026-06-18
+- **Status:** accepted
+- **Decision:** The episodic-memory reward (the teaching signal stored per episode) is the
+  **AAPL-own-drift-demeaned** forward return:
+  `reward = sign(action) · (forward_return(t,h) − μ)`, with `forward_return(t,h) = P[t+1+h]/P[t+1] − 1`
+  and `μ` = AAPL's trailing average `h`-session return, computed point-in-time (data ≤ t). It is
+  **not** market-adjusted against SPY. Exposed as `config.reward_benchmark ∈ {raw, aapl_drift}`
+  (default `aapl_drift`) and treated as an ablation. Reported PnL stays raw, net of fees.
+- **Reason:** Two failure modes to avoid. (1) *Raw* reward has a positive drift bias → in a bull
+  market "always long" earns reward with zero skill. (2) *SPY-adjusted* reward (`forward − SPY_return`,
+  the spec §7.1 wording) is wrong for a **single-asset** agent whose action space is AAPL-only
+  {long, flat, short}: SPY's realized return is large and can exceed AAPL's, flipping the sign so the
+  reward perversely ranks *shorting a stock that rose* (but lagged the index) as the best action.
+  Demeaning by `μ` (the mean) removes the drift bias **and** keeps the long-vs-short decision boundary
+  at ≈0 (`long ≻ short ⟺ forward > μ ≈ 0`), so the action that actually made money stays best-rewarded.
+  Principle: *center out the bias, don't swap in a different (un-actionable) benchmark.* Also note the
+  spec's literal "benchmark = buy & hold AAPL" self-cancels to 0, confirming it was an error.
+- **Rejected alternatives:** *Raw sign-weighted* (keeps the always-long bias); *SPY / market-adjusted*
+  (inverts the reward for a single-asset agent — see above); *vs buy-&-hold AAPL* (long episodes → 0,
+  uninformative). "Beat the market" belongs in the **evaluation layer** (baselines + Sharpe), not the
+  memory teaching signal.
+- **Consequences:** Adds `reward_benchmark` (+ a point-in-time trailing-`μ` window) to `config.py`; the
+  reward must compute `μ` without lookahead. `flat` actions get reward 0 (`sign(0)=0`) → memory cannot
+  learn from good flat calls (accepted simplification). Benchmark choice becomes a robustness ablation.
+  Updated: `PLAN.md` Step 3 + `CLAUDE.md` data note.
+
 ## ADR-001 · Project-local `.venv`; split dev vs full runtime
 - **Date:** 2026-06-18
 - **Status:** accepted

@@ -9,7 +9,10 @@ You are the **generator**. You implement exactly one atomic unit, well, with tes
 
 ## Workflow
 
-1. Read the unit spec, the relevant `.claude/rules/`, the touched files, and `src/schemas.py`.
+1. Read for the full picture first: the substep plan (`plan/S{i}_*/S{ij}_plan_*.md` — incl. its
+   Skeleton Python Code + Definition of Done), the matching `### Step {i}` of `PLAN.md`, the relevant
+   `.claude/rules/` (always `follow-the-plan.md`), the touched `src/` stubs, `config.py`, and
+   `src/schemas.py`. (Same read-first procedure as the `implement-substep` skill.)
 2. Implement the unit. Match surrounding style. Replace the `NotImplementedError("Mx: ...")` stub for
    that unit only — do not expand scope.
 3. Write/extend unit tests for the unit (offline, deterministic, on fixtures).

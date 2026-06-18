@@ -8,7 +8,7 @@ Milestone **M0 (Setup)** complete: repo scaffold + harness in place, `make check
 logic (every `src/` function raises `NotImplementedError` tagged with its milestone).
 `project_description.md` is the single source of truth; when it conflicts with anything else, follow
 it. Sections 12–13 of that file are written directly to Claude Code and are mandatory — read them
-before writing code. Current status lives in `PROGRESS.md`; what's built lives in `features.json`.
+before writing code. Status: `PROGRESS.md`; what's built: `features.json`; build roadmap: `PLAN.md`.
 
 ## Harness map (read these)
 
@@ -21,12 +21,12 @@ before writing code. Current status lives in `PROGRESS.md`; what's built lives i
 | Security / leakage | [security-rules.md](.claude/rules/security-rules.md) | — |
 | Git workflow | [git-workflow.md](.claude/rules/git-workflow.md) | — |
 | Data stores | — | [database-rules.md](docs/database-rules.md) |
+| Plan & simple fixes | [follow-the-plan.md](.claude/rules/follow-the-plan.md) | `plan/` + `PLAN.md` |
 
-- **Sub-agents** (`.claude/agents/`): `planner_agent` (decompose, never codes), `generator_agent`
-  (implement + test one unit), `reviewer_agent` (pessimistic independent review), `verifier_agent`
-  (runs `make check`, evidence-first), `test_writer_agent`, `doc_agent`.
-- **Skills** (`.claude/skills/`): `run-verification`, `update-progress`, `feature-status`,
-  `check-lookahead` (domain audit).
+- **Sub-agents** (`.claude/agents/`): `planner_agent` (decompose, never codes), `generator_agent`,
+  `reviewer_agent` (pessimistic), `verifier_agent` (`make check`), `test_writer_agent`, `doc_agent`.
+- **Skills** (`.claude/skills/`): `implement-substep` (read plan → build → verify DoD), `run-verification`,
+  `update-progress`, `feature-status`, `check-lookahead`. **To build a substep, use `implement-substep`.**
 - **Tracking:** `PROGRESS.md` (session state), `DECISIONS.md` (ADRs), `features.json` (machine-readable
   feature/verification list).
 - **Gate:** `.claude/settings.json` runs `make check` as a pre-commit hook (blocks red commits).
@@ -140,10 +140,10 @@ curve + metrics (Sharpe, MaxDD, turnover, avg holding period) vs buy & hold; `te
 
 ## Data notes
 
-Source: Alpha Vantage (free, 25 req/day → download once, cache to Parquet): AAPL news
-(`NEWS_SENTIMENT&tickers=AAPL`), macro (`NEWS_SENTIMENT&topics=...`), price
-(`TIME_SERIES_DAILY_ADJUSTED`), SPY trend. Cast string numerics to float; pick the AAPL entry in
+Sources (download once, cache to Parquet): **news** via Alpha Vantage (free, 25 req/day) — AAPL
+(`NEWS_SENTIMENT&tickers=AAPL`) + macro (`NEWS_SENTIMENT&topics=...`); **prices** (AAPL + SPY adjusted
+OHLCV) via Yahoo Finance (`yfinance`, no key). Cast AV string numerics to float; pick the AAPL entry in
 `ticker_sentiment`. AV `ticker_sentiment_score` is a baseline/cross-check only — **never the primary
-signal**; `relevance_score` is a filter (drop < ~0.3), not alpha. Memory reward is the **abnormal**
-forward return (entering t+1, h=5): `sign(action) × (forward_return(t,h) − benchmark_return(t,h))`.
+signal**; `relevance_score` is a filter (drop < ~0.3), not alpha. Memory reward is the **AAPL-drift-
+demeaned** forward return (enter t+1, h=5): `sign(action)·(forward_return(t,h) − μ)` — NOT SPY-adjusted (ADR-002).
 See [docs/database-rules.md](docs/database-rules.md).
