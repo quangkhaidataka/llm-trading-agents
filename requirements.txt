@@ -1,0 +1,19 @@
+# Pinned for reproducibility. Adjust versions as needed during M0.
+langchain==0.3.27
+langchain-core==0.3.79
+langchain-groq==0.3.10
+langchain-openai==0.3.40
+langgraph==0.6.10
+pydantic==2.12.3
+faiss-cpu==1.13.0
+sentence-transformers==5.1.2
+pandas==2.3.4
+numpy==2.2.6
+ta==0.11.0
+vectorbt==0.28.2
+scikit-learn==1.8.0
+pyarrow==22.0.0
+requests==2.32.5
+python-dotenv==1.2.1
+matplotlib==3.10.7
+pytest==8.4.2

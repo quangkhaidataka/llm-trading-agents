@@ -1,0 +1,141 @@
+{
+  "$schema_note": "Machine-readable feature list. state ∈ {not_started, active, blocked, passing}. A feature is 'passing' only when its 'verification' command currently succeeds; record proof in 'evidence'. Derived from project_description.md (no project_spec.docx present).",
+  "features": [
+    {
+      "id": "F01",
+      "milestone": "M0",
+      "behavior": "Project scaffold runs offline: CLI entrypoint loads and `make check` (lint+typecheck+test+e2e) passes with no business logic.",
+      "verification": "make check",
+      "state": "passing",
+      "evidence": "M0 initial commit on main; `make check` green @ 2026-06-18 (smoke + e2e pass)"
+    },
+    {
+      "id": "F02",
+      "milestone": "M1",
+      "behavior": "Single point-in-time data gate: for every t, get_observation(ticker, t) returns no data timestamped after t (no look-ahead).",
+      "verification": "make setup-full && .venv/bin/python -m pytest tests/test_no_lookahead.py -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F03",
+      "milestone": "M1",
+      "behavior": "Data download + Parquet cache for AAPL news, macro news (by topic), price, and SPY; offline mode reads fixtures.",
+      "verification": ".venv/bin/python -m src.main --mode download --offline",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F04",
+      "milestone": "M2",
+      "behavior": "NewsAgent reads AAPL news and returns a valid NewsSignal (idiosyncratic channel).",
+      "verification": ".venv/bin/python -m pytest tests/test_agents.py -k news -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F05",
+      "milestone": "M2",
+      "behavior": "MacroAgent reads macro-by-topic news + SPY trend and returns a valid MacroSignal (systematic channel; never relevance-filtered).",
+      "verification": ".venv/bin/python -m pytest tests/test_agents.py -k macro -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F06",
+      "milestone": "M2",
+      "behavior": "TechnicalAgent interprets precomputed indicators and returns a valid TechnicalSignal (no number fabrication).",
+      "verification": ".venv/bin/python -m pytest tests/test_agents.py -k technical -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F07",
+      "milestone": "M3",
+      "behavior": "MemoryAgent retrieves top-k closed FAISS episodes and returns a valid MemoryContext.",
+      "verification": ".venv/bin/python -m pytest tests/test_agents.py -k memory -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F08",
+      "milestone": "M2",
+      "behavior": "DebateAgent fuses the four signals + PortfolioState into a state-aware ResearchStance (hold/open/close/flip with Bull+Bear cases).",
+      "verification": ".venv/bin/python -m pytest tests/test_agents.py -k debate -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F09",
+      "milestone": "M3",
+      "behavior": "PositionManager applies asymmetric hysteresis (tau_enter/exit/flip) + risk veto and returns a TradeDecision.",
+      "verification": ".venv/bin/python -m pytest tests/test_position_manager.py -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F10",
+      "milestone": "M3",
+      "behavior": "LangGraph orchestration runs one day end-to-end and carries PortfolioState (position + thesis) across days.",
+      "verification": ".venv/bin/python -m pytest tests/test_graph.py -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F11",
+      "milestone": "M3",
+      "behavior": "Delayed point-in-time memory: an episode for day t is written to FAISS only at t+1+h and retrieval returns only closed episodes.",
+      "verification": ".venv/bin/python -m pytest tests/test_memory.py -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F12",
+      "milestone": "M4",
+      "behavior": "Walk-forward backtest over 2025-2026 with transaction fees on every position change produces an equity curve + metrics (Sharpe, MaxDD, turnover, avg holding period), PnL net of fees, execution at t+1.",
+      "verification": ".venv/bin/python -m src.main --mode backtest",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F13",
+      "milestone": "M5",
+      "behavior": "Baselines computed and compared: buy & hold, single-agent (News only), and pure AV-sentiment.",
+      "verification": ".venv/bin/python -m pytest tests/test_eval.py -k baseline -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F14",
+      "milestone": "M5",
+      "behavior": "Ablations runnable via config variants: stateless-classifier, no-memory, no-macro, no-debate, no-hysteresis.",
+      "verification": ".venv/bin/python -m src.main --mode ablation",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F15",
+      "milestone": "M5",
+      "behavior": "Conviction calibrated to empirical P(correct) (isotonic/Platt) on 2022-2024 with a reliability diagram.",
+      "verification": ".venv/bin/python -m pytest tests/test_calibration.py -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F16",
+      "milestone": "M5",
+      "behavior": "Model-sensitivity: re-run with a swapped LLM backbone (config.provider/model_id) with no other code change.",
+      "verification": ".venv/bin/python -m pytest tests/test_model_sensitivity.py -q",
+      "state": "not_started",
+      "evidence": ""
+    },
+    {
+      "id": "F17",
+      "milestone": "cross-cutting",
+      "behavior": "Ticker-dynamic: setting config.ticker (e.g. AMZN) re-runs the whole pipeline with no other line changed; no hardcoded 'AAPL'.",
+      "verification": ".venv/bin/python -m pytest tests/test_smoke.py -k ticker -q",
+      "state": "active",
+      "evidence": "config-level guard passing @ 2026-06-18; full-pipeline acceptance pending M4"
+    }
+  ]
+}

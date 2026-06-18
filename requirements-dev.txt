@@ -1,0 +1,8 @@
+# Dev tooling + the minimal runtime needed to import & test the scaffold.
+# The heavy runtime stack (langchain, faiss, vectorbt, ...) is in requirements.txt
+# and only needed from milestone M1 onward — install it with `make setup-full`.
+ruff==0.14.4
+mypy==1.18.2
+pytest==8.4.2
+pydantic==2.12.3
+python-dotenv==1.2.1

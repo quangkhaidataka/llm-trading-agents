@@ -1,0 +1,75 @@
+"""A2A message contracts (spec §4.3).
+
+Every agent communicates ONLY through these fixed Pydantic schemas — never free
+text. This turns agent dialogue into a structured, testable, ablatable protocol.
+Each agent is built as `prompt | llm.with_structured_output(Schema)`.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class PortfolioState(BaseModel):
+    """State carried across days by the LangGraph loop."""
+
+    current_position: Literal[-1, 0, 1] = 0
+    active_thesis: str = ""               # reason for entry; empty if flat
+    entry_price: float | None = None
+    days_held: int = 0
+
+
+class NewsSignal(BaseModel):
+    """NewsAgent — idiosyncratic / AAPL-specific channel."""
+
+    signal: Literal["long", "flat", "short"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    sentiment: float = Field(ge=-1.0, le=1.0)
+    rationale: str
+
+
+class MacroSignal(BaseModel):
+    """MacroAgent — systematic / macro channel (routes to risk veto)."""
+
+    regime: Literal["risk_on", "neutral", "risk_off"]
+    macro_risk: float = Field(ge=0.0, le=1.0)   # today's systematic risk level
+    drivers: list[str]                          # e.g. ["Fed meeting", "Iran tensions"]
+    rationale: str
+
+
+class TechnicalSignal(BaseModel):
+    """TechnicalAgent — interprets precomputed indicators (no number-crunching)."""
+
+    signal: Literal["long", "flat", "short"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    indicators: dict
+    rationale: str
+
+
+class MemoryContext(BaseModel):
+    """MemoryAgent — experience retrieved from FAISS."""
+
+    analogs: list[str]                          # k similar past situations + outcomes
+    lesson: str
+
+
+class ResearchStance(BaseModel):
+    """DebateAgent — decision RELATIVE to the current position."""
+
+    action: Literal["hold", "open", "close", "flip"]
+    target_direction: Literal[-1, 0, 1]
+    conviction: float = Field(ge=0.0, le=1.0)
+    thesis_still_valid: bool
+    bull_case: str
+    bear_case: str
+
+
+class TradeDecision(BaseModel):
+    """PositionManager — final position transition for session t+1."""
+
+    new_position: Literal[-1, 0, 1]
+    new_thesis: str                             # updated on open/flip
+    vetoed: bool = False
+    reason: str

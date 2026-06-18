@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Apple unveils new product lineup at annual event",
+    "summary": "Apple announced updates across its hardware range, with analysts noting solid demand signals.",
+    "time_published": "20240603T133000",
+    "relevance": 0.92,
+    "av_sentiment": 0.31
+  },
+  {
+    "title": "Apple supplier reports stronger-than-expected orders",
+    "summary": "A key Apple supplier raised guidance, hinting at robust iPhone production volumes.",
+    "time_published": "20240602T091500",
+    "relevance": 0.68,
+    "av_sentiment": 0.22
+  },
+  {
+    "title": "Analyst trims Apple price target on China concerns",
+    "summary": "A brokerage lowered its Apple target citing softer demand in China.",
+    "time_published": "20240531T201000",
+    "relevance": 0.74,
+    "av_sentiment": -0.18
+  }
+]

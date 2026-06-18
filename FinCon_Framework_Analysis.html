@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinCon — Phân tích Cấu trúc Framework</title>
+<style>
+  :root{
+    --bg:#0c0f1a; --panel:#151a28; --panel2:#1b2233; --line:#2c3550;
+    --txt:#e8edf5; --muted:#98a3bb; --accent:#a78bfa; --accent2:#60a5fa;
+    --mgr:#fbbf24; --ana:#34d399; --risk:#f472b6;
+    --good:#4ade80; --bad:#f87171; --warn:#fcd34d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    line-height:1.7;font-size:16px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px 80px}
+  header.hero{padding:54px 24px 40px;text-align:center;
+    background:radial-gradient(ellipse at top,#1e1b3a 0%,var(--bg) 70%);
+    border-bottom:1px solid var(--line)}
+  .hero .tag{display:inline-block;font-size:12px;letter-spacing:2px;text-transform:uppercase;
+    color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:4px 14px;margin-bottom:18px}
+  .hero h1{font-size:44px;margin:0 0 8px;letter-spacing:1px}
+  .hero h1 span{color:var(--accent)}
+  .hero p.sub{color:var(--muted);max-width:740px;margin:6px auto 0;font-size:17px}
+  .hero .meta{margin-top:18px;font-size:13px;color:var(--muted)}
+  .hero .meta b{color:var(--txt)}
+  h2.sec{font-size:27px;margin:56px 0 6px;padding-bottom:10px;border-bottom:2px solid var(--accent);
+    display:flex;align-items:center;gap:12px}
+  h2.sec .num{background:var(--accent);color:#0c0f1a;width:34px;height:34px;border-radius:9px;
+    display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex:none}
+  h3.sub{font-size:21px;margin:34px 0 4px;color:var(--accent2)}
+  h4{font-size:17px;margin:20px 0 4px;color:var(--txt)}
+  p{margin:10px 0}
+  .lead{color:var(--muted);font-size:16px;margin-top:4px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:18px 0}
+  .card.tint{background:var(--panel2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:780px){.grid2,.grid3{grid-template-columns:1fr}.hero h1{font-size:32px}}
+  .pill{display:inline-block;font-size:12px;padding:3px 10px;border-radius:20px;margin:2px 4px 2px 0;
+    background:#222a40;color:var(--accent2);border:1px solid var(--line)}
+  .eq{background:#0a1120;border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:14px 0;
+    font-family:"SF Mono",Menlo,Consolas,monospace;font-size:15px;color:var(--accent);overflow-x:auto}
+  .eq .lbl{float:right;color:var(--muted);font-size:13px;font-family:inherit}
+  .note{font-size:14px;color:var(--muted)}
+  ul.clean{margin:10px 0;padding-left:22px}
+  ul.clean li{margin:7px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px}
+  th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:#1d2638;color:var(--accent2)}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;margin:18px 0}
+  .step{flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:14px;margin:6px}
+  .step .n{font-size:12px;color:var(--accent);font-weight:700}
+  .step b{display:block;margin:4px 0 2px}
+  .arrow{align-self:center;color:var(--accent);font-size:22px;padding:0 2px}
+  .prosbox{border:1px solid var(--line);border-radius:12px;padding:4px 20px 16px;background:var(--panel)}
+  .prosbox.good{border-top:4px solid var(--good)}
+  .prosbox.bad{border-top:4px solid var(--bad)}
+  .good h3{color:var(--good)} .bad h3{color:var(--bad)}
+  .prosbox li{margin:10px 0}
+  .prosbox li b{color:var(--txt)}
+  .tech{background:linear-gradient(135deg,#161c2c,#1a2030);border:1px solid var(--line);
+    border-left:4px solid var(--accent2);border-radius:10px;padding:14px 18px;margin:14px 0}
+  .tech .h{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);font-weight:700}
+  .supports{font-size:13.5px;color:var(--warn);margin-top:8px}
+  .supports::before{content:"↳ Hỗ trợ phần: ";color:var(--muted)}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 26px;margin:30px 0}
+  .toc a{color:var(--accent2);text-decoration:none;display:block;padding:4px 0;font-size:15px}
+  .toc a:hover{color:var(--accent)}
+  .kw{color:var(--accent);font-weight:600}
+  .diagram{background:#0a1020;border:1px solid var(--line);border-radius:14px;padding:26px;margin:18px 0}
+  .agentbox{border-radius:11px;padding:14px 16px;margin:8px 0;border-left:5px solid}
+  .agentbox.mgr{border-color:var(--mgr);background:rgba(251,191,36,.08)}
+  .agentbox.ana{border-color:var(--ana);background:rgba(52,211,153,.08)}
+  .agentbox.risk{border-color:var(--risk);background:rgba(244,114,182,.08)}
+  .analyst-chip{display:inline-block;background:var(--panel2);border:1px solid var(--ana);border-radius:9px;
+    padding:8px 12px;margin:5px;font-size:13.5px;vertical-align:top;width:calc(33% - 12px);min-width:180px}
+  .analyst-chip b{color:var(--ana)}
+  @media(max-width:780px){.analyst-chip{width:100%}}
+  .hierarchy{text-align:center}
+  .hbox{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:12px 20px;margin:8px;background:var(--panel2)}
+  .hbox.t1{border-color:var(--mgr);color:var(--mgr)}
+  .hbox.t2{border-color:var(--ana)}
+  .hbox.t3{border-color:var(--risk);color:var(--risk)}
+  .vline{width:2px;height:22px;background:var(--line);margin:0 auto}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="tag">LLM Multi-Agent System · NeurIPS 2024</div>
+  <h1><span>Fin</span>Con</h1>
+  <p class="sub">A Synthesized LLM Multi-Agent System with Conceptual Verbal Reinforcement for Enhanced Financial Decision Making</p>
+  <p class="sub">Phân tích chuyên sâu <b>cấu trúc &amp; mô hình</b> framework — manager–analyst hierarchy, dual-level risk control, modular design và toàn bộ technical details trong Appendix</p>
+  <div class="meta">Yu, Yao, Li, Deng, Xie et al. — Stevens · Harvard · The Fin AI · arXiv:2407.06567v3 &nbsp;|&nbsp; Chỉ tập trung phần <b>Framework Structure</b></div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <b style="color:var(--accent)">Mục lục</b>
+  <a href="#overview">0 · Tổng quan: từ FinMem (single-agent) → FinCon (multi-agent)</a>
+  <a href="#pomdp">1 · Nền tảng toán học — POMDP &amp; bài toán tối ưu</a>
+  <a href="#hierarchy">2 · Component A — Manager-Analyst Hierarchical Structure</a>
+  <a href="#risk">3 · Component B — Dual-Level Risk Control (CVaR + CVRF)</a>
+  <a href="#modular">4 · Modular Design — 4 module bên trong mỗi agent</a>
+  <a href="#appendix">5 · Appendix Technical Details — phân tích từng chi tiết</a>
+  <a href="#eval">6 · Đánh giá: Cái hay &amp; Chưa hay</a>
+</div>
+
+<!-- ===================== OVERVIEW ===================== -->
+<h2 class="sec" id="overview"><span class="num">0</span>Tổng quan kiến trúc</h2>
+<p class="lead">FinCon là một <span class="kw">multi-agent system</span> mô phỏng <b>cấu trúc của một công ty đầu tư thực tế</b>: nhiều chuyên viên phân tích (analyst) báo cáo lên một quản lý (manager) ra quyết định. Nó được sinh ra để khắc phục đúng các yếu điểm của FinMem/FinGPT/FinAgent: (1) rủi ro chỉ dựa biến động ngắn hạn, (2) chỉ giao dịch đơn tài sản, (3) một agent gánh quá nhiều thông tin trong context window hạn chế.</p>
+
+<div class="diagram hierarchy">
+  <div class="hbox t1">⬢ MANAGER AGENT &nbsp;— người ra quyết định duy nhất</div>
+  <div class="vline"></div>
+  <div>
+    <span class="hbox t2">7 × ANALYST AGENTS</span>
+    <span class="hbox t3">RISK-CONTROL COMPONENT</span>
+  </div>
+  <p class="note" style="margin-top:14px">Giao tiếp <b>theo chiều dọc (hierarchical)</b> thay vì thảo luận ngang hàng (peer-to-peer) → giảm mạnh chi phí truyền thông &amp; tăng tốc ra quyết định.</p>
+</div>
+
+<div class="card tint">
+<p><b>Hai trụ cột thiết kế:</b> (A) <span class="kw">Synthesized Manager-Analyst Hierarchical Structure</span> — phân bổ mỗi nguồn dữ liệu cho một analyst chuyên trách, manager tổng hợp; và (B) <span class="kw">Dual-Level Risk Control</span> — kiểm soát rủi ro ở 2 cấp: trong-episode (CVaR) &amp; xuyên-episode (verbal reinforcement). FinCon tổng quát cho cả <b>single stock trading</b> lẫn <b>portfolio management</b> — điều FinMem chưa làm được.</p>
+</div>
+
+<!-- ===================== POMDP ===================== -->
+<h2 class="sec" id="pomdp"><span class="num">1</span>Nền tảng toán học — POMDP</h2>
+<p class="lead">FinCon mô hình hóa giao dịch định lượng như một <b>Partially Observable Markov Decision Process</b> (POMDP) vô hạn — nền tảng lý thuyết để định nghĩa "tối ưu hóa bằng ngôn ngữ" (verbal reinforcement) thay vì gradient số.</p>
+
+<div class="card">
+  <h4>Các thành phần POMDP</h4>
+  <ul class="clean">
+    <li><b>State space X × Y:</b> X là phần quan sát được, Y là phần ẩn của thị trường.</li>
+    <li><b>Action space:</b> nhóm analyst A = ∏ Aᵢ (thông tin đã xử lý dạng text); manager: {buy, sell, hold} cho đơn tài sản, hoặc ({buy,sell,hold} × [−1,1])<sup>⊗N</sup> cho portfolio.</li>
+    <li><b>Reward R(o,b,a):</b> dùng <b>daily PnL</b> (lãi/lỗ ngày) làm output.</li>
+    <li><b>Observation Oᵢ:</b> mỗi analyst i chỉ xử lý <b>một luồng thông tin uni-modal</b>.</li>
+    <li><b>Reflection process Bₜ:</b> self-reflection của manager, cập nhật Bₜ → Bₜ₊₁ hằng ngày.</li>
+  </ul>
+  <h4>Hàm mục tiêu hệ thống</h4>
+  <div class="eq">max<sub>θ</sub> &nbsp; 𝔼 [ Σ<sub>t∈T</sub> α<sup>t</sup> R<sub>t</sub><sup>Πθ</sup> ] <span class="lbl">(2)</span></div>
+  <p class="note">Toàn bộ chính sách Π<sub>θ</sub> được <b>tham số hóa bằng prompt văn bản θ</b>, không phải trọng số mạng nơ-ron. Hệ thống tối ưu θ qua risk-control component theo kiểu <b>"textual gradient descent"</b> (chi tiết Mục 5.1) — đây là khác biệt nền tảng so với DRL.</p>
+</div>
+
+<div class="card tint">
+  <h4>Bài toán tối ưu danh mục (Portfolio)</h4>
+  <div class="eq">max<sub>w</sub> ⟨w, μ⟩ − ⟨w, Σw⟩ &nbsp; s.t. &nbsp; wₙ ∈ [0,1] nếu "buy", [−1,0] nếu "sell", =0 nếu "hold" <span class="lbl">(1)</span></div>
+  <p class="note">μ &amp; Σ là <b>shrinkage estimator</b> của kỳ vọng lợi nhuận &amp; ma trận hiệp phương sai. Đây là <b>mean-variance optimization</b> kinh điển (Markowitz) — manager quyết định <i>hướng</i> giao dịch, còn trọng số cụ thể do solver tối ưu hóa lồi giải. Trọng số được tái cân bằng (rebalance) hằng ngày.</p>
+</div>
+
+<!-- ===================== HIERARCHY ===================== -->
+<h2 class="sec" id="hierarchy"><span class="num">2</span>Component A — Manager-Analyst Hierarchical Structure</h2>
+<p class="lead">Mục tiêu: tối đa hóa chất lượng &amp; khả năng hiểu thông tin, đồng thời tối thiểu hóa chi phí giao tiếp dư thừa.</p>
+
+<h3 class="sub" id="analysts">2.1 · Analyst Agents — 7 chuyên viên phân tích</h3>
+<p>Mỗi analyst <b>chỉ xử lý đúng một nguồn dữ liệu theo kiểu uni-modal</b>, chắt lọc insight cô đọng để giảm tải nhận thức &amp; tăng độ tập trung (giống một team người thật, mỗi người một chuyên môn, lọc nhiễu thị trường).</p>
+
+<div class="diagram">
+  <div class="analyst-chip"><b>① News Analyst</b><br><span class="note">Tin tức hằng ngày (text)</span></div>
+  <div class="analyst-chip"><b>② Filing 10-K Analyst</b><br><span class="note">Báo cáo năm (text)</span></div>
+  <div class="analyst-chip"><b>③ Filing 10-Q Analyst</b><br><span class="note">Báo cáo quý (text)</span></div>
+  <div class="analyst-chip"><b>④ Audio/ECC Analyst</b><br><span class="note">Earnings Call qua <span class="kw">Whisper API</span> — tone, nhịp, ngữ điệu</span></div>
+  <div class="analyst-chip"><b>⑤ Data Analysis Agent</b><br><span class="note">Tính momentum, CVaR... từ time-series dạng bảng</span></div>
+  <div class="analyst-chip"><b>⑥ Stock Selection Agent</b><br><span class="note">Chọn stock pool qua risk diversification cho portfolio</span></div>
+</div>
+<p class="note">Bài báo nêu "7 loại analyst" — gồm 3 agent text (news + 2 loại filing), 1 agent audio, 1 data analysis, 1 stock selection. Tất cả <b>chắt lọc thông tin đã khử nhiễu</b> từ nhiều góc nhìn rồi gửi lên manager.</p>
+
+<h3 class="sub">2.2 · Manager Agent — người ra quyết định duy nhất</h3>
+<div class="agentbox mgr">
+  <p style="margin:4px 0"><b>Là agent duy nhất sinh hành động giao dịch.</b> Với portfolio, nó tính trọng số qua tối ưu hóa lồi bị ràng buộc bởi hướng giao dịch (Công thức 1). Mỗi quyết định dựa trên 4 cơ chế:</p>
+  <ul class="clean">
+    <li><b>Consolidate:</b> tổng hợp insight đã chắt lọc từ nhiều analyst.</li>
+    <li><b>Receive alerts:</b> nhận cảnh báo rủi ro &amp; cập nhật niềm tin (belief) từ risk-control component.</li>
+    <li><b>Refine beliefs:</b> tinh chỉnh "niềm tin đầu tư" về mức ảnh hưởng của từng nguồn thông tin lên quyết định.</li>
+    <li><b>Self-reflection:</b> xem lại kết quả suy luận của các hành động trước.</li>
+  </ul>
+</div>
+<div class="tech">
+  <div class="h">Ý nghĩa thiết kế phân cấp</div>
+  <p style="margin:6px 0">Giao tiếp <b>một chiều dọc</b> (analyst → manager → phản hồi xuống analyst liên quan) thay cho tranh luận đa chiều giữa nhiều agent (như StockAgent). Điều này tránh được <b>mục tiêu tối ưu mơ hồ</b> và <b>chi phí giao tiếp bùng nổ</b> — hai vấn đề của multi-agent debate.</p>
+</div>
+
+<!-- ===================== RISK ===================== -->
+<h2 class="sec" id="risk"><span class="num">3</span>Component B — Dual-Level Risk Control</h2>
+<p class="lead">Đây là đóng góp sáng tạo nhất của FinCon: kiểm soát rủi ro ở <b>hai tầng thời gian</b> khác nhau.</p>
+
+<div class="grid2">
+  <div class="agentbox risk" style="margin:0">
+    <h3 class="sub" style="margin-top:4px;color:var(--risk)">3.1 · Within-Episode (trong 1 episode)</h3>
+    <p><b>Công cụ: CVaR</b> (Conditional Value at Risk) — trung bình của 1% PnL ngày tệ nhất.</p>
+    <ul class="clean">
+      <li><b>Kích hoạt:</b> khi CVaR <b>sụt giảm đột ngột</b> → tín hiệu thị trường rủi ro cao.</li>
+      <li><b>Phản ứng:</b> manager lập tức chuyển sang <b>risk-averse</b> cho hành động ngày đó, bất kể trạng thái trước.</li>
+      <li><b>Hoạt động ở cả train &amp; test.</b></li>
+    </ul>
+    <p class="note">Vai trò: phản xạ nhanh với cú sốc thị trường ngắn hạn (real-time).</p>
+  </div>
+
+  <div class="agentbox risk" style="margin:0">
+    <h3 class="sub" style="margin-top:4px;color:var(--risk)">3.2 · Over-Episode (xuyên các episode)</h3>
+    <p><b>Cơ chế: CVRF</b> (Conceptual Verbal Reinforcement) — cơ chế cốt lõi.</p>
+    <ul class="clean">
+      <li><b>Chỉ chạy khi training.</b> So sánh hiệu suất episode hiện tại vs trước đó.</li>
+      <li>Theo cơ chế <b>Actor-Critic</b>: phản tỉnh chuỗi hành động thắng/thua → khái niệm hóa (conceptualize) thành "investment belief".</li>
+      <li>Belief được <b>back-propagate từ manager → chỉ các analyst liên quan</b> (chọn lọc, giảm giao tiếp thừa).</li>
+    </ul>
+    <p class="note">Vai trò: học chiến lược dài hạn, tránh lặp lại sai lầm đầu tư.</p>
+  </div>
+</div>
+
+<h4>Quy trình CVRF (Algorithm 1 — Training Stage)</h4>
+<div class="flow">
+  <div class="step"><div class="n">1</div><b>Chạy policy</b><span class="note">thu PnL rₜ, trọng số wₜ, CVaR ρₜ mỗi ngày</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">2</div><b>Trigger reflection</b><span class="note">nếu ρₜ&lt;ρₜ₋₁ hoặc rₜ&lt;0 → sinh text Bₜ</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">3</div><b>So sánh 2 episode</b><span class="note">k−1 vs k, chọn cái hiệu suất cao hơn</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">4</div><b>Conceptualize</b><span class="note">tóm tắt insight {c¹...cⁿ} cho từng episode</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">5</div><b>Update prompt</b><span class="note">θ ← Mr(θ, τ, meta-prompt)</span></div>
+</div>
+
+<div class="tech">
+  <div class="h">Learning rate "ngôn ngữ" τ — chi tiết tinh tế</div>
+  <p style="margin:6px 0">Khác với Tang et al. (dùng <i>khoảng cách chỉnh sửa prompt</i> làm learning rate), FinCon đo <b>phần trăm trùng lặp (overlapping %) của chuỗi quyết định giao dịch</b> giữa 2 episode liền kề để làm "tốc độ học" τ. Khi overlap cao (vd &gt;80%) → belief đã hội tụ, cập nhật nhỏ. Đây là cách "mô phỏng learning rate" mà không có gradient số thực sự.</p>
+</div>
+
+<table>
+  <tr><th>Yếu tố</th><th>Gradient-based optimizer (DRL)</th><th>LLM-based prompt optimizer (FinCon)</th></tr>
+  <tr><td>Hướng cập nhật</td><td>Momentum của gradient giá trị</td><td>Quỹ đạo phản tỉnh trong prompt (reflection trajectory)</td></tr>
+  <tr><td>Phương pháp update</td><td>Learning-rate descent</td><td>% trùng lặp của quyết định giao dịch</td></tr>
+</table>
+
+<!-- ===================== MODULAR ===================== -->
+<h2 class="sec" id="modular"><span class="num">4</span>Modular Design — 4 module trong mỗi agent</h2>
+<p class="lead">Lấy cảm hứng từ kiến trúc nhận thức của Park et al. &amp; Sumers et al., mỗi agent (cả manager lẫn analyst) tích hợp 4 module + một general configuration chung.</p>
+
+<div class="grid2">
+  <div class="card">
+    <h4>① General Config &amp; Profiling Module</h4>
+    <p class="note">Định nghĩa loại nhiệm vụ (stock/portfolio), mục tiêu giao dịch (ngành, hiệu suất). Profiling gán <b>vai trò &amp; trách nhiệm</b>: manager = "trưởng phòng giao dịch tổng hợp insight"; analyst = "chuyên viên phân tích nguồn X". Nội dung text này tạo <b>query truy vấn memory database</b>.</p>
+  </div>
+  <div class="card">
+    <h4>② Perception Module</h4>
+    <p class="note">Định nghĩa cách mỗi agent <b>cảm nhận / nhận / gửi</b> thông tin, tùy vai trò. Chuyển dữ liệu thị trường thô + phản hồi từ agent khác + thông tin từ memory thành <b>định dạng tương thích LLM</b>.</p>
+  </div>
+  <div class="card">
+    <h4>③ Memory Module (3 loại bộ nhớ)</h4>
+    <ul class="clean" style="margin:6px 0">
+      <li><b>Working memory:</b> observation, distillation, refinement — tùy vai trò agent.</li>
+      <li><b>Procedural memory:</b> sinh sau mỗi bước quyết định; lưu hành động, insight, sentiment. Có ở <b>cả</b> manager &amp; analyst (nhưng nội dung khác nhau).</li>
+      <li><b>Episodic memory:</b> <b>chỉ manager mới có</b> — lưu hành động, chuỗi PnL của các episode trước &amp; belief đã cập nhật.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>④ Action Module</h4>
+    <p class="note">Chủ yếu của <b>manager</b>: <b>Conduct</b> (thực thi hành động giao dịch) &amp; <b>Reflect</b> (lý do giao dịch + đánh giá đóng góp của từng analyst). Analyst không trực tiếp giao dịch.</p>
+  </div>
+</div>
+
+<div class="tech">
+  <div class="h">Điểm tinh tế: decay rate riêng cho từng analyst</div>
+  <p style="margin:6px 0">Procedural memory của mỗi analyst có <b>tốc độ phân rã (decay rate) khác nhau</b>, phản ánh độ thời sự của nguồn dữ liệu mà nó phụ trách (news phân rã nhanh, 10-K phân rã chậm). Đây chính là <b>tinh thần "layered memory" của FinMem được kế thừa</b>, nhưng phân tán ra từng agent thay vì gộp 3 tầng trong 1 agent. Manager củng cố procedural memory của analyst qua một <b>access counter</b>.</p>
+  <div class="supports">Memory Module — kết nối triết lý FinMem vào kiến trúc multi-agent của FinCon.</div>
+</div>
+
+<!-- ===================== APPENDIX ===================== -->
+<h2 class="sec" id="appendix"><span class="num">5</span>Appendix Technical Details</h2>
+<p class="lead">Phần phụ lục (A.1–A.15) chứa các chi tiết kỹ thuật quan trọng. Dưới đây phân tích từng cái và <b>nó hỗ trợ phần nào</b> trong framework chính.</p>
+
+<div class="tech">
+  <div class="h">A.2 · Textual Gradient Descent — "đạo hàm bằng ngôn ngữ"</div>
+  <p style="margin:6px 0">Dùng một <b>meta-prompt</b> để tinh chỉnh task-prompt. Vì prompt optimization không có gradient tường minh, FinCon "mô phỏng gradient" bằng <b>khả năng phản tỉnh của LLM</b>: sinh feedback từ thành công/thất bại quá khứ → tạo "tín hiệu gradient ngữ nghĩa". Để tránh dao động/overshoot (như learning rate sai), nó đo % trùng lặp quyết định giữa các vòng lặp rồi chỉnh sửa prompt từng bước nhỏ, ổn định &amp; tăng dần.</p>
+  <div class="supports">là cơ chế toán học nền tảng của <b>CVRF / Over-Episode Risk Control</b> (Mục 3.2) và hàm mục tiêu (2).</div>
+</div>
+
+<div class="tech">
+  <div class="h">A.3 · Testing Stage Workflow (Algorithm 2)</div>
+  <p style="margin:6px 0">Khi test: FinCon <b>kế thừa</b> manager/analyst, reflections B, prompt đã học θ, policy đã train. <b>Over-episode (CVRF) NGỪNG hoạt động</b>; nhưng <b>within-episode (CVaR) VẪN chạy</b> — cho phép manager điều chỉnh hành động real-time theo biến động ngắn hạn. Đảm bảo agent vẫn phản ứng được rủi ro ngay cả khi test.</p>
+  <div class="supports">làm rõ ranh giới hoạt động của 2 tầng Risk Control (Mục 3) giữa train vs test.</div>
+</div>
+
+<div class="tech">
+  <div class="h">A.10 · Công thức rủi ro — VaR &amp; CVaR</div>
+  <div class="eq">VaR<sub>α</sub>(PnL) = inf{ l ∈ ℝ : P(PnL ≤ l) ≥ α } <span class="lbl">(3)</span></div>
+  <div class="eq">CVaR<sub>α</sub>(PnL) = 𝔼[ PnL | PnL ≤ VaR<sub>α</sub>(PnL) ] <span class="lbl">(4)</span></div>
+  <p class="note">VaR = ngưỡng lỗ tại mức tin cậy α. CVaR = kỳ vọng phần lỗ <b>còn tệ hơn</b> VaR (đuôi rủi ro). FinCon chọn CVaR vì nó nhạy với rủi ro đuôi hơn — quan trọng trong cú sốc thị trường.</p>
+  <div class="supports">là định nghĩa định lượng cho <b>Within-Episode Risk Control</b> (Mục 3.1) — thay thế cơ chế rủi ro thô của FinMem.</div>
+</div>
+
+<div class="tech">
+  <div class="h">A.13 · Ranking Metrics cho Procedural Memory — điểm khác biệt vs FinMem</div>
+  <div class="eq">γ<sup>E</sup> = S<sub>Relevancy</sub> + S<sub>Importance</sub> <span class="lbl">(10) — chỉ 2 thành phần!</span></div>
+  <div class="eq">S<sub>Importance</sub> = v<sup>E</sup> × θ<sup>δt</sup> &nbsp;,&nbsp; δt = t<sub>P</sub> − t<sub>E</sub> <span class="lbl">(12)</span></div>
+  <p style="margin:6px 0">Đây là phiên bản <b>đơn giản hóa</b> của cơ chế xếp hạng memory trong FinMem. Khác biệt cốt lõi: FinMem dùng <b>3 thành phần</b> (Recency + Relevancy + Importance riêng), còn FinCon <b>gộp Recency vào Importance</b> — yếu tố thời gian (đường quên Ebbinghaus) được nhúng thẳng vào θ<sup>δt</sup>. Mỗi agent có bộ {v<sup>E</sup>, θ} <b>riêng</b> → tạo decay rate riêng cho từng nguồn dữ liệu. Access counter +5 Importance cho ID then chốt (qua Guardrails AI), giống FinMem.</p>
+  <div class="supports">chi tiết hóa <b>Procedural Memory</b> trong Modular Design (Mục 4.③) — chính là cầu nối kế thừa &amp; tinh giản từ FinMem.</div>
+</div>
+
+<div class="tech">
+  <div class="h">A.4 / A.8 · Cấu hình &amp; nguồn dữ liệu</div>
+  <ul class="clean" style="margin-top:6px">
+    <li><b>Backbone:</b> GPT-4-Turbo, temperature = 0.3 (thấp hơn FinMem để ổn định hơn); riêng <b>belief generation đặt temperature = 0</b> để output nhất quán.</li>
+    <li><b>Top-K memory = 5</b> cho mỗi agent.</li>
+    <li><b>Nguồn:</b> Refinitiv Real-Time News (Reuters), 10-Q/10-K từ SEC EDGAR, giá từ Yahoo Finance, ECC audio từ Capital IQ, Zacks Equity Research (Zacks Rank, lý do mua/bán).</li>
+    <li><b>Học cực nhanh:</b> chỉ <b>4 training episode</b> đã đạt hiệu quả — ít hơn nhiều so với DRL.</li>
+  </ul>
+</div>
+
+<div class="tech">
+  <div class="h">A.7.2 · Minh chứng CVRF tiến hóa belief (ví dụ GOOG)</div>
+  <p style="margin:6px 0">Qua 4 episode, % trùng lặp hành động tăng dần: 46.9% → 71.4% → 81.6% (hội tụ). Belief từ mơ hồ ("dùng momentum indicator") tiến hóa thành cụ thể, khả thi ("dùng giá trị momentum âm để bán kịp thời, dương để mua kịp thời, điều chỉnh ngưỡng..."). Cho thấy CVRF thực sự <b>làm giàu nội dung khái niệm</b> theo từng vòng.</p>
+  <div class="supports">bằng chứng vận hành cho cơ chế <b>Over-Episode CVRF</b> (Mục 3.2).</div>
+</div>
+
+<!-- ===================== EVALUATION ===================== -->
+<h2 class="sec" id="eval"><span class="num">6</span>Đánh giá Framework</h2>
+<p class="lead">Phân tích điểm hay (ưu) &amp; chưa hay (nhược) về mặt <b>thiết kế kiến trúc</b> — không bàn số liệu kết quả.</p>
+
+<div class="grid2">
+  <div class="prosbox good">
+    <h3>✓ Cái hay</h3>
+    <ul class="clean">
+      <li><b>Phân chia lao động giải bài toán context window.</b> Mỗi analyst uni-modal gánh một nguồn → giảm tải nhận thức, sắc nét hóa insight. Đây là lời giải trực diện cho yếu điểm single-agent của FinMem.</li>
+      <li><b>Dual-level risk control rất tinh tế.</b> Tách rủi ro thành phản xạ nhanh (CVaR, real-time) &amp; học dài hạn (CVRF, theo episode) — phản ánh đúng cách quản trị rủi ro của quỹ thực.</li>
+      <li><b>Dùng thước đo rủi ro định lượng chuẩn.</b> CVaR thay cho "cumulative return âm" thô sơ của FinMem → kiểm soát đuôi rủi ro chặt chẽ hơn.</li>
+      <li><b>CVRF — verbal reinforcement có cơ sở.</b> Biến reflection thành "gradient ngôn ngữ" với learning-rate mô phỏng (% overlap), tạo cơ chế học ổn định không cần fine-tune trọng số.</li>
+      <li><b>Giao tiếp phân cấp tiết kiệm.</b> Belief chỉ propagate tới analyst liên quan → tránh bùng nổ chi phí của multi-agent debate.</li>
+      <li><b>Tổng quát hóa sang portfolio.</b> Tích hợp mean-variance optimization + cho phép short-selling → vượt giới hạn "1 cổ phiếu, 1 share" của FinMem.</li>
+      <li><b>Đa phương thức thực sự.</b> Tích hợp được audio ECC (tone, nhịp giọng) qua Whisper — nguồn tín hiệu mà FinAgent xử lý kém.</li>
+      <li><b>Học cực nhanh (4 episode).</b> Hiệu quả dữ liệu vượt trội so với DRL cần nhiều năm dữ liệu.</li>
+    </ul>
+  </div>
+
+  <div class="prosbox bad">
+    <h3>✗ Chưa hay / Hạn chế thiết kế</h3>
+    <ul class="clean">
+      <li><b>Manager là single point of failure.</b> Toàn bộ quyết định dồn vào một agent duy nhất — vẫn chịu áp lực context khi portfolio lớn, và lỗi của manager không có cơ chế kiểm tra chéo.</li>
+      <li><b>Hallucination tăng theo số tài sản.</b> Bài báo tự thừa nhận: portfolio đa tài sản dễ sinh thông tin sai (vd ID memory event không tồn tại) do input dài &amp; phức tạp.</li>
+      <li><b>Khó mở rộng (scalability).</b> Tác giả nêu rõ thách thức scale lên hàng chục tài sản: phải cân bằng giữa cô đọng thông tin (distillation) &amp; suy giảm hiệu suất khi nới context — chưa giải quyết.</li>
+      <li><b>Over-episode chỉ chạy khi train.</b> Khi test, agent không còn cập nhật belief → nếu chế độ thị trường (regime) đổi sau khi train, hệ thống có thể lỗi thời.</li>
+      <li><b>Phụ thuộc nhiều nguồn dữ liệu trả phí &amp; chất lượng cao.</b> Refinitiv, Capital IQ, Zacks, ECC audio... — chi phí dựng lại &amp; tái lập rất cao, khó áp dụng cho thị trường thiếu dữ liệu (vd VN).</li>
+      <li><b>Cơ chế "7 analyst" cứng &amp; thủ công.</b> Số lượng &amp; loại analyst, cách phân nguồn, top-K=5, temperature... đều cấu hình tay; chưa có cơ chế tự động sinh/điều chỉnh số agent theo nhiệm vụ.</li>
+      <li><b>CVaR đuôi 1% nhạy nhiễu trên mẫu nhỏ.</b> Ước lượng 1% PnL tệ nhất trên cửa sổ ngắn dễ bất ổn định, có thể kích hoạt cảnh báo rủi ro sai.</li>
+      <li><b>Backbone GPT-4-Turbo bắt buộc.</b> Cũng như FinMem, framework đòi hỏi LLM mạnh nhất → chi phí inference cao cho nhiều agent chạy song song.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card tint" style="margin-top:24px">
+<p><b>Kết tinh thiết kế:</b> FinCon nâng tầm tư duy "cognitive trading agent" của FinMem lên cấp <i>tổ chức</i> — mô phỏng cả một công ty đầu tư với phân cấp manager-analyst &amp; quản trị rủi ro 2 tầng. Đột phá thực sự nằm ở <b>CVRF</b> (học chiến lược qua "gradient ngôn ngữ") và <b>CVaR within-episode</b> (rủi ro định lượng real-time). Đổi lại, nó phức tạp hơn nhiều, phụ thuộc nguồn dữ liệu đắt đỏ, và vẫn để ngỏ bài toán scale danh mục lớn — hướng nghiên cứu tương lai mà chính tác giả chỉ ra.</p>
+</div>
+
+<footer>
+  Tài liệu phân tích cấu trúc framework FinCon · Biên soạn cho XNO_Quant<br>
+  Nguồn: Yu, Yao, Li, Deng, Xie et al., "FinCon: A Synthesized LLM Multi-Agent System with Conceptual Verbal Reinforcement", NeurIPS 2024 · arXiv:2407.06567v3
+</footer>
+
+</div>
+</body>
+</html>

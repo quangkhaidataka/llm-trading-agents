@@ -1,0 +1,38 @@
+{
+  "NewsAgent": {
+    "signal": "long",
+    "confidence": 0.62,
+    "sentiment": 0.28,
+    "rationale": "Product launch and supplier upgrade outweigh a single China downgrade."
+  },
+  "MacroAgent": {
+    "regime": "neutral",
+    "macro_risk": 0.45,
+    "drivers": ["Fed on hold", "rising yields", "geopolitical tension"],
+    "rationale": "Mixed signals: steady Fed but higher yields and a risk-off geopolitical tone."
+  },
+  "TechnicalAgent": {
+    "signal": "long",
+    "confidence": 0.55,
+    "indicators": {"rsi": 58.2, "macd": 0.7, "ma20": 191.3, "ma50": 189.8, "vol20": 0.21, "mom": 0.012},
+    "rationale": "Price above MA20/MA50 with positive MACD; RSI not yet overbought."
+  },
+  "MemoryAgent": {
+    "analogs": ["2023-09 launch run-up -> +2.1% abnormal", "2024-01 China scare -> -0.8% abnormal"],
+    "lesson": "Launch-driven optimism has historically held for ~1 week absent macro shocks."
+  },
+  "DebateAgent": {
+    "action": "open",
+    "target_direction": 1,
+    "conviction": 0.66,
+    "thesis_still_valid": true,
+    "bull_case": "Demand signals plus technical confirmation support a long.",
+    "bear_case": "Elevated macro risk and China demand questions could cap upside."
+  },
+  "PositionManager": {
+    "new_position": 1,
+    "new_thesis": "Launch-driven demand + technical confirmation; exit if macro turns risk_off.",
+    "vetoed": false,
+    "reason": "Conviction above tau_enter and no active risk veto."
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Fed holds rates steady, signals caution on cuts",
+    "summary": "The Federal Reserve kept rates unchanged and stressed a data-dependent path.",
+    "time_published": "20240602T180000",
+    "topics": ["economy_monetary"]
+  },
+  {
+    "title": "Treasury yields edge higher ahead of jobs data",
+    "summary": "Yields rose as investors positioned for an upcoming labor-market report.",
+    "time_published": "20240601T140000",
+    "topics": ["financial_markets", "economy_macro"]
+  },
+  {
+    "title": "Geopolitical tensions weigh on risk sentiment",
+    "summary": "Escalating tensions added a risk-off tone across global markets.",
+    "time_published": "20240530T100000",
+    "topics": ["economy_macro"]
+  }
+]

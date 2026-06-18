@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+data/*.parquet
+data/*.json
+logs/
+.ipynb_checkpoints/
+faiss_index/
+*.faiss

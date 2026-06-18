@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinMem — Phân tích Cấu trúc Framework</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2d3748;
+    --txt:#e6edf3; --muted:#9aa7b4; --accent:#4fd1c5; --accent2:#63b3ed;
+    --shallow:#f6ad55; --inter:#68d391; --deep:#7f9cf5;
+    --good:#48bb78; --bad:#fc8181; --warn:#f6e05e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    line-height:1.7;font-size:16px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px 80px}
+  header.hero{padding:54px 24px 40px;text-align:center;
+    background:radial-gradient(ellipse at top,#1a2535 0%,var(--bg) 70%);
+    border-bottom:1px solid var(--line)}
+  .hero .tag{display:inline-block;font-size:12px;letter-spacing:2px;text-transform:uppercase;
+    color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:4px 14px;margin-bottom:18px}
+  .hero h1{font-size:44px;margin:0 0 8px;letter-spacing:1px}
+  .hero h1 span{color:var(--accent)}
+  .hero p.sub{color:var(--muted);max-width:720px;margin:6px auto 0;font-size:17px}
+  .hero .meta{margin-top:18px;font-size:13px;color:var(--muted)}
+  .hero .meta b{color:var(--txt)}
+  h2.sec{font-size:27px;margin:56px 0 6px;padding-bottom:10px;border-bottom:2px solid var(--accent);
+    display:flex;align-items:center;gap:12px}
+  h2.sec .num{background:var(--accent);color:#0d1117;width:34px;height:34px;border-radius:9px;
+    display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex:none}
+  h3.sub{font-size:21px;margin:34px 0 4px;color:var(--accent2)}
+  h4{font-size:17px;margin:20px 0 4px;color:var(--txt)}
+  p{margin:10px 0}
+  .lead{color:var(--muted);font-size:16px;margin-top:4px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:18px 0}
+  .card.tint{background:var(--panel2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:780px){.grid2,.grid3{grid-template-columns:1fr}.hero h1{font-size:32px}}
+  .pill{display:inline-block;font-size:12px;padding:3px 10px;border-radius:20px;margin:2px 4px 2px 0;
+    background:#22303f;color:var(--accent2);border:1px solid var(--line)}
+  .layer{border-radius:12px;padding:16px 18px;margin:12px 0;border-left:5px solid}
+  .layer.sh{border-color:var(--shallow);background:rgba(246,173,85,.08)}
+  .layer.in{border-color:var(--inter);background:rgba(104,211,145,.08)}
+  .layer.de{border-color:var(--deep);background:rgba(127,156,245,.08)}
+  .layer h4{margin:0 0 6px;display:flex;align-items:center;gap:8px}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .eq{background:#0b1622;border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:14px 0;
+    font-family:"SF Mono",Menlo,Consolas,monospace;font-size:15px;color:var(--accent);overflow-x:auto}
+  .eq .lbl{float:right;color:var(--muted);font-size:13px;font-family:inherit}
+  .note{font-size:14px;color:var(--muted)}
+  ul.clean{margin:10px 0;padding-left:22px}
+  ul.clean li{margin:7px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px}
+  th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:#1c2533;color:var(--accent2)}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:18px 0}
+  .step{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:14px;margin:6px;position:relative}
+  .step .n{font-size:12px;color:var(--accent);font-weight:700}
+  .step b{display:block;margin:4px 0 2px}
+  .arrow{align-self:center;color:var(--accent);font-size:22px;padding:0 2px}
+  .prosbox{border:1px solid var(--line);border-radius:12px;padding:4px 20px 16px;background:var(--panel)}
+  .prosbox.good{border-top:4px solid var(--good)}
+  .prosbox.bad{border-top:4px solid var(--bad)}
+  .prosbox h3{color:inherit}
+  .good h3{color:var(--good)} .bad h3{color:var(--bad)}
+  .prosbox li{margin:10px 0}
+  .prosbox li b{color:var(--txt)}
+  .tech{background:linear-gradient(135deg,#16202c,#1a2433);border:1px solid var(--line);
+    border-left:4px solid var(--accent2);border-radius:10px;padding:14px 18px;margin:14px 0}
+  .tech .h{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);font-weight:700}
+  .supports{font-size:13.5px;color:var(--warn);margin-top:8px}
+  .supports::before{content:"↳ Hỗ trợ: ";color:var(--muted)}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 26px;margin:30px 0}
+  .toc a{color:var(--accent2);text-decoration:none;display:block;padding:4px 0;font-size:15px}
+  .toc a:hover{color:var(--accent)}
+  .kw{color:var(--accent);font-weight:600}
+  .diagram{background:#0b1320;border:1px solid var(--line);border-radius:14px;padding:26px;margin:18px 0;text-align:center}
+  .mod{display:inline-block;vertical-align:top;width:30%;min-width:230px;margin:10px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:12px;padding:16px;text-align:left}
+  .mod .ic{font-size:24px}
+  .mod h4{margin:6px 0}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;text-align:center}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="tag">LLM Trading Agent · q-fin.CP</div>
+  <h1><span>Fin</span>Mem</h1>
+  <p class="sub">Performance-Enhanced LLM Trading Agent with Layered Memory and Character Design</p>
+  <p class="sub">Phân tích chuyên sâu <b>cấu trúc &amp; mô hình</b> của framework — từng component, ý nghĩa, mục đích và technical details</p>
+  <div class="meta">Yu, Li, Chen et al. — Stevens Institute of Technology · arXiv:2311.13743v2 · &nbsp;|&nbsp; Tài liệu chỉ tập trung phần <b>Framework Structure</b></div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <b style="color:var(--accent)">Mục lục</b>
+  <a href="#overview">0 · Tổng quan kiến trúc 3 module</a>
+  <a href="#profiling">1 · Profiling Module — Thiết kế nhân vật (Character)</a>
+  <a href="#memory">2 · Memory Module — Working &amp; Layered Long-term Memory</a>
+  <a href="#decision">3 · Decision-making Module — Ra quyết định giao dịch</a>
+  <a href="#tech">4 · Technical Details — Công thức &amp; tham số chi phối framework</a>
+  <a href="#eval">5 · Đánh giá: Cái hay &amp; Chưa hay</a>
+</div>
+
+<!-- ===================== OVERVIEW ===================== -->
+<h2 class="sec" id="overview"><span class="num">0</span>Tổng quan kiến trúc</h2>
+<p class="lead">FinMem là một <span class="kw">single-agent</span> dùng LLM (GPT-4-Turbo) làm backbone, được thiết kế để mô phỏng <b>hệ thống nhận thức (cognitive system) của một trader con người</b>. Ý tưởng gốc kế thừa từ Generative Agents (Park et al.) nhưng cải tiến để xử lý dữ liệu tài chính có <b>tính thời sự (timeliness) khác nhau</b>. Toàn bộ framework gồm đúng 3 module nối tiếp nhau.</p>
+
+<div class="diagram">
+  <div class="mod">
+    <div class="ic" style="color:var(--accent)">①</div>
+    <h4>Profiling Module</h4>
+    <p class="note">Định hình "tính cách" của agent: kiến thức nền chuyên môn + khẩu vị rủi ro. Giúp lọc và bối cảnh hóa thông tin.</p>
+  </div><span class="arrow">→</span>
+  <div class="mod">
+    <div class="ic" style="color:var(--inter)">②</div>
+    <h4>Memory Module</h4>
+    <p class="note">Trái tim của framework. Working memory (xử lý tức thời) + Layered long-term memory (3 tầng theo độ thời sự).</p>
+  </div><span class="arrow">→</span>
+  <div class="mod">
+    <div class="ic" style="color:var(--accent2)">③</div>
+    <h4>Decision-making Module</h4>
+    <p class="note">Tổng hợp output của 2 module trên thành hành động Buy / Sell / Hold cho từng ngày giao dịch.</p>
+  </div>
+</div>
+
+<div class="card tint">
+<p><b>Điểm cốt lõi cần nắm:</b> FinMem giải quyết hai yếu điểm của các agent tài chính trước đó: (1) chúng xử lý mọi thông tin <i>không phân biệt</i> độ thời sự (tin tức ngày vs báo cáo năm), và (2) thiếu cơ chế <i>ghi nhớ &amp; ưu tiên</i> sự kiện quan trọng. FinMem giải quyết cả hai bằng <span class="kw">layered memory</span> với các <b>tốc độ phân rã (decay rate) khác nhau</b> cho từng loại dữ liệu.</p>
+</div>
+
+<!-- ===================== PROFILING ===================== -->
+<h2 class="sec" id="profiling"><span class="num">1</span>Profiling Module</h2>
+<p class="lead">Mục đích: tạo cho agent một "nhân cách giao dịch" động (dynamic character), cung cấp <b>bối cảnh chủ quan &amp; kiến thức chuyên môn</b> để lọc/truy hồi thông tin liên quan. Gồm 2 thành phần.</p>
+
+<div class="grid2">
+  <div class="card">
+    <h3 class="sub" style="margin-top:8px">1.1 · Professional Knowledge Base</h3>
+    <p>Kiến thức nền như một chuyên gia giao dịch về <b>đúng mã cổ phiếu</b> sắp giao dịch. Gồm 2 loại thông tin:</p>
+    <ul class="clean">
+      <li><b>Trading Sectors:</b> giới thiệu ngành/lĩnh vực kinh doanh chính của công ty (ví dụ TSLA → Consumer Cyclical, EV, Auto Manufacturers).</li>
+      <li><b>Historical Financial Performance:</b> tóm tắt tình hình tài chính của mã từ đầu đến cuối giai đoạn training.</li>
+    </ul>
+    <p class="note"><b>Ý nghĩa:</b> thu hẹp không gian thông tin — chỉ giữ lại các memory event liên quan đến đúng nhiệm vụ giao dịch. Trước khi giao dịch mã mới, agent tự truy xuất &amp; cập nhật phần này từ backend database.</p>
+  </div>
+
+  <div class="card">
+    <h3 class="sub" style="margin-top:8px">1.2 · Risk Inclination (Khẩu vị rủi ro)</h3>
+    <p>Agent chọn 1 trong 3 cấu hình rủi ro:</p>
+    <ul class="clean">
+      <li><span class="pill" style="color:var(--bad);border-color:var(--bad)">Risk-Seeking</span> ưa mạo hiểm, săn lợi nhuận cao, chấp nhận biến động lớn.</li>
+      <li><span class="pill" style="color:var(--inter);border-color:var(--inter)">Risk-Averse</span> bảo thủ, ưu tiên ổn định, giữ vốn, chọn biến động thấp.</li>
+      <li><span class="pill" style="color:var(--accent);border-color:var(--accent)">Self-Adaptive</span> tự động chuyển đổi giữa hai trạng thái trên.</li>
+    </ul>
+    <p class="note"><b>Cơ chế self-adaptive (điểm hay nhất):</b> khi <b>Cumulative Return rơi xuống dưới 0</b> trong khoảng thời gian ngắn (vd 3 ngày) → chuyển sang risk-averse; và ngược lại khi dương → risk-seeking. Đây là một "cơ chế bảo vệ" giảm thiểu thua lỗ kéo dài trong thị trường biến động.</p>
+  </div>
+</div>
+
+<div class="tech">
+  <div class="h">Chi tiết kỹ thuật trong module</div>
+  <p style="margin:6px 0">Mỗi risk inclination được nạp vào LLM dưới dạng <b>prompt mô tả văn bản đầy đủ</b>. Hệ thống lưu một <b>catalog (backlog)</b> tất cả các khẩu vị rủi ro &amp; phần giải thích của chúng, cho phép chuyển đổi mượt mà giữa các mã cổ phiếu khác nhau bằng cách hoán đổi profile.</p>
+  <div class="supports">định hình toàn bộ cách Memory Module lọc thông tin và cách Decision-making Module suy luận — character setting đi vào prompt query khi tính điểm relevancy.</div>
+</div>
+
+<!-- ===================== MEMORY ===================== -->
+<h2 class="sec" id="memory"><span class="num">2</span>Memory Module</h2>
+<p class="lead">Đây là module mang tính đột phá nhất, mô phỏng hệ thống nhận thức con người theo lý thuyết <b>"Levels of Processing"</b> (Craik &amp; Lockhart, 1972). Gồm <b>Working Memory</b> và <b>Layered Long-term Memory</b>.</p>
+
+<h3 class="sub" id="wm">2.1 · Working Memory — Không gian làm việc tức thời</h3>
+<p>Tương tự "vùng nhớ tạm" của con người (giới hạn 7±2 sự kiện), nhưng FinMem <b>có thể mở rộng dung lượng</b> tùy nhu cầu. Là trung tâm điều phối, thực hiện 3 operation chính:</p>
+
+<div class="grid3">
+  <div class="card" style="margin:8px 0">
+    <h4>① Summarization</h4>
+    <p class="note">Cô đọng văn bản gốc (tin tức, 10-K, 10-Q) thành đoạn tóm tắt ~1000 token, kèm <b>phân tích sentiment</b> (positive/neutral/negative, tổng = 1). Sau đó định tuyến insight vào đúng tầng long-term memory theo độ thời sự.</p>
+  </div>
+  <div class="card" style="margin:8px 0">
+    <h4>② Observation</h4>
+    <p class="note">Thu thập "sự thật thị trường" (market facts).<br><b>Training:</b> nhìn được chênh lệch giá đóng cửa hôm sau vs hôm nay → nhãn ground-truth Buy/Sell.<br><b>Testing:</b> KHÔNG nhìn được giá tương lai → dựa trên cumulative return của M ngày gần nhất (momentum).</p>
+  </div>
+  <div class="card" style="margin:8px 0">
+    <h4>③ Reflection</h4>
+    <p class="note">Có 2 loại:<br><b>Immediate:</b> kích hoạt mỗi truy vấn ngày, gộp market indication + top-K event mỗi tầng → ra quyết định + lý do + ID event ảnh hưởng nhất.<br><b>Extended:</b> đánh giá lại các immediate reflection trong M ngày, tổng hợp xu hướng &amp; cumulative return.</p>
+  </div>
+</div>
+
+<div class="tech">
+  <div class="h">Vai trò 2 siêu tham số K và M</div>
+  <ul class="clean" style="margin-top:6px">
+    <li><b>K</b> — số memory event top được lấy từ <i>mỗi</i> tầng long-term memory. Dung lượng working memory = <b>3 × K</b> (3 tầng). Tăng K → mở rộng "tầm nhận thức" vượt giới hạn con người.</li>
+    <li><b>M</b> — độ dài cửa sổ truy hồi (số ngày) cho extended reflection và tính momentum trong phase testing.</li>
+  </ul>
+  <div class="supports">Extended reflection được <b>chuyển xuống tầng deep</b> để lưu giữ lâu dài → liên kết Working Memory với Long-term Memory.</div>
+</div>
+
+<h3 class="sub" id="ltm">2.2 · Layered Long-term Memory — Bộ nhớ phân tầng</h3>
+<p>Tổ chức insight tài chính theo 3 tầng với <b>tốc độ phân rã khác nhau</b>: tầng càng sâu → decay càng chậm → giữ thông tin càng lâu. Mỗi memory event chỉ thuộc đúng <b>một</b> tầng và có một điểm số duy nhất.</p>
+
+<div class="layer sh">
+  <h4><span class="dot" style="background:var(--shallow)"></span>Shallow Processing Layer — Tầng nông</h4>
+  <p style="margin:4px 0"><b>Dữ liệu:</b> Tin tức thị trường hàng ngày (daily news). Cập nhật hằng ngày. <b>Q = 14 ngày</b> (~2 tuần) · base α = 0.9 (phân rã nhanh nhất).</p>
+  <p class="note">Tác động tức thời lên giá nhưng "hết hạn" nhanh.</p>
+</div>
+<div class="layer in">
+  <h4><span class="dot" style="background:var(--inter)"></span>Intermediate Processing Layer — Tầng trung</h4>
+  <p style="margin:4px 0"><b>Dữ liệu:</b> Báo cáo quý 10-Q. Cập nhật hằng quý. <b>Q = 90 ngày</b> (~1 quý) · base α = 0.967.</p>
+  <p class="note">Tác động trung hạn, độ thời sự vừa phải.</p>
+</div>
+<div class="layer de">
+  <h4><span class="dot" style="background:var(--deep)"></span>Deep Processing Layer — Tầng sâu</h4>
+  <p style="margin:4px 0"><b>Dữ liệu:</b> Báo cáo năm 10-K + Extended Reflection. Cập nhật hằng năm/hằng ngày. <b>Q = 365 ngày</b> · base α = 0.988 (phân rã chậm nhất).</p>
+  <p class="note">Tác động dài hạn, được giữ lâu nhất để định hướng chiến lược.</p>
+</div>
+
+<h4>Điểm truy hồi thông tin (Information Retrieval Score)</h4>
+<p>Khi có truy vấn, mỗi tầng được xếp hạng và lấy top-K event theo điểm tổng hợp 3 thành phần:</p>
+<div class="eq">γ<sub>l</sub><sup>E</sup> = S<sub>Recency</sub> + S<sub>Relevancy</sub> + S<sub>Importance</sub> <span class="lbl">(1) — l ∈ {shallow, intermediate, deep}</span></div>
+<p class="note">Các điểm thành phần &gt; 1.0 được chuẩn hóa về [0,1] trước khi cộng. Đây là chỗ FinMem <b>cải tiến so với Park et al.</b>: thay đổi cách tính Recency &amp; Importance để phù hợp tính chu kỳ của dữ liệu tài chính. Chi tiết từng công thức ở Mục 4.</p>
+
+<!-- ===================== DECISION ===================== -->
+<h2 class="sec" id="decision"><span class="num">3</span>Decision-making Module</h2>
+<p class="lead">Tích hợp output từ Profiling + Memory để ra quyết định. Hành động được giới hạn bằng công cụ <span class="kw">Guardrails AI</span> (validate text) thành đúng 3 lựa chọn: <b>Buy / Sell / Hold</b> cho 1 share. Cơ chế khác nhau giữa 2 phase:</p>
+
+<div class="grid2">
+  <div class="card" style="border-top:3px solid var(--inter)">
+    <h3 class="sub" style="margin-top:6px">Training Phase — Tích lũy kinh nghiệm</h3>
+    <ul class="clean">
+      <li>Truy cập đầy đủ thông tin đa nguồn của toàn giai đoạn.</li>
+      <li>Đồng thời chạy Observation + Summarization.</li>
+      <li>Quan sát <b>nhãn ground-truth</b> (chênh lệch giá ngày kế tiếp) → Buy/Sell.</li>
+      <li><b>KHÔNG ra quyết định thực sự</b> — vì đã biết hướng giá. Thay vào đó tạo reflection để <i>giải thích vì sao</i> giá biến động, liên kết nhãn với memory.</li>
+      <li>Event quan trọng được chuyển dần xuống tầng sâu để dùng cho testing.</li>
+    </ul>
+  </div>
+  <div class="card" style="border-top:3px solid var(--accent2)">
+    <h3 class="sub" style="margin-top:6px">Testing Phase — Ra quyết định độc lập</h3>
+    <ul class="clean">
+      <li>KHÔNG truy cập giá tương lai.</li>
+      <li>Dựa vào: Cumulative Return của M ngày trước + Extended Reflection + Top-K memory retrieved.</li>
+      <li><b>Chỉ ở đây mới sinh hành động thực thi</b> (executable action), trong operation immediate reflection.</li>
+      <li>Đánh giá xem agent đã thiết lập tốt liên kết logic giữa xu hướng giá và các nguồn thông tin hay chưa.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="flow">
+  <div class="step"><div class="n">INPUT</div><b>Truy vấn giao dịch</b><span class="note">Ticker + ngày + character text</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">RETRIEVE</div><b>Top-K mỗi tầng</b><span class="note">theo điểm γ</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">REFLECT</div><b>Immediate Reflection</b><span class="note">gộp facts + memory</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">OUTPUT</div><b>Buy / Sell / Hold</b><span class="note">+ lý do + ID event</span></div>
+</div>
+
+<!-- ===================== TECHNICAL DETAILS ===================== -->
+<h2 class="sec" id="tech"><span class="num">4</span>Technical Details — Công thức chi phối framework</h2>
+<p class="lead">FinMem không có Appendix riêng — toàn bộ technical detail nằm trong Section 3. Dưới đây phân tích từng công thức và <b>nó hỗ trợ phần nào</b> của framework.</p>
+
+<div class="tech">
+  <div class="h">4.1 · Recency Score — Đường quên Ebbinghaus</div>
+  <div class="eq">S<sub>Recency</sub> = e<sup>−δ/Q<sub>l</sub></sup> &nbsp;,&nbsp; δ = t<sub>P</sub> − t<sub>E</sub> <span class="lbl">(2)</span></div>
+  <p>δ là khoảng cách thời gian giữa lúc event xảy ra và lúc có truy vấn. Hằng số ổn định <b>Q<sub>l</sub></b> kiểm soát tốc độ phân rã: Q nông=14, trung=90, sâu=365. Q càng lớn → nhớ càng dai. Mô phỏng <b>đường quên Ebbinghaus</b>.</p>
+  <div class="supports">đây chính là cơ chế tạo ra "tính phân tầng" theo độ thời sự cho Layered Long-term Memory (Mục 2.2).</div>
+</div>
+
+<div class="tech">
+  <div class="h">4.2 · Relevancy Score — Tương đồng ngữ nghĩa</div>
+  <div class="eq">S<sub>Relevancy</sub> = (m<sub>E</sub> · m<sub>P</sub>) / (‖m<sub>E</sub>‖ × ‖m<sub>P</sub>‖) <span class="lbl">(3)</span></div>
+  <p><b>Cosine similarity</b> giữa embedding của nội dung event (m<sub>E</sub>) và của truy vấn prompt (m<sub>P</sub>). Embedding tạo bởi model <span class="kw">text-embedding-ada-002</span> của OpenAI. Quan trọng: prompt query <b>chứa cả character setting</b> từ Profiling Module.</p>
+  <div class="supports">là cầu nối Profiling Module ↔ Memory — khẩu vị rủi ro &amp; kiến thức nền ảnh hưởng trực tiếp event nào được coi là "liên quan".</div>
+</div>
+
+<div class="tech">
+  <div class="h">4.3 · Importance Score — Tầm quan trọng phân rã theo tầng</div>
+  <div class="eq">v<sub>l</sub><sup>E</sup> = 40 (p₁) / 60 (p₂) / 80 (p₃) &nbsp;&nbsp;&nbsp; θ<sub>l</sub> = (α<sub>l</sub>)<sup>δ</sup> &nbsp;&nbsp;&nbsp; S<sub>Importance</sub> = v<sub>l</sub><sup>E</sup> × θ<sub>l</sub> <span class="lbl">(4)(5)(6)</span></div>
+  <p>Giá trị cơ sở v lấy từ hàm bậc thang (piecewise) với xác suất khác nhau theo tầng — tầng càng sâu càng dễ nhận v cao:</p>
+  <table>
+    <tr><th>Tầng</th><th>p₁ (v=40)</th><th>p₂ (v=60)</th><th>p₃ (v=80)</th><th>α (base decay)</th></tr>
+    <tr><td>Shallow</td><td>0.80</td><td>0.15</td><td>0.05</td><td>0.900</td></tr>
+    <tr><td>Intermediate</td><td>0.05</td><td>0.80</td><td>0.15</td><td>0.967</td></tr>
+    <tr><td>Deep</td><td>0.05</td><td>0.15</td><td>0.80</td><td>0.988</td></tr>
+  </table>
+  <p class="note">θ đo độ suy giảm tầm quan trọng theo thời gian. Các α được chọn để θ giảm về ngưỡng 5 sau đúng 30/90/365 ngày. <b>Cơ chế dọn rác:</b> event bị xóa khi S<sub>Recency</sub> &lt; 0.05 <i>hoặc</i> S<sub>Importance</sub> &lt; 5 (trước scaling).</p>
+  <div class="supports">cùng với Recency tạo ra cấu trúc "3 hàm bậc thang" giúp xử lý phân tầng trong long-term memory.</div>
+</div>
+
+<div class="tech">
+  <div class="h">4.4 · Access Counter — Cơ chế thăng tầng sự kiện</div>
+  <p>Một bộ đếm truy cập giám sát việc <b>di chuyển event giữa các tầng</b>. Sự kiện quan trọng được đẩy từ tầng nông → sâu để giữ lâu &amp; truy cập lặp lại; event ít liên quan thì mờ dần. Dùng <span class="kw">Guardrails AI</span> để theo dõi ID memory quan trọng qua các tầng. Một event được xác định là then chốt cho lợi nhuận → <b>cộng thêm 5 điểm Importance</b>; khi đủ điều kiện thăng tầng → <b>reset Recency về 1.0</b> để chống phân rã nhanh.</p>
+  <div class="supports">cơ chế "tự tiến hóa" (self-evolving) của bộ nhớ — biến memory tĩnh thành động, ưu tiên đúng sự kiện theo bản chất &amp; tần suất truy hồi.</div>
+</div>
+
+<div class="tech">
+  <div class="h">4.5 · Hạ tầng &amp; tham số hệ thống</div>
+  <ul class="clean" style="margin-top:6px">
+    <li><b>Vector DB:</b> <span class="kw">FAISS</span> — tìm kiếm tương đồng cosine tốc độ cao trên không gian vector chiều cao, dựng "memory warehouse".</li>
+    <li><b>Kho dữ liệu:</b> Raw Financial Data Warehouse → phân tách thành Layered Long-term Memory Data Warehouse qua operation Summarization.</li>
+    <li><b>Backbone &amp; tham số:</b> GPT-4-Turbo, temperature = 0.7 (cân bằng nhất quán &amp; sáng tạo); K mặc định = 5.</li>
+    <li><b>Nguồn dữ liệu:</b> Yahoo Finance (giá OHLCV), Alpaca News API (backend Benzinga), 10-Q &amp; 10-K từ SEC.</li>
+  </ul>
+</div>
+
+<!-- ===================== EVALUATION ===================== -->
+<h2 class="sec" id="eval"><span class="num">5</span>Đánh giá Framework</h2>
+<p class="lead">Phân tích điểm hay (ưu) và chưa hay (nhược) về mặt <b>thiết kế kiến trúc</b> — không bàn về kết quả số liệu.</p>
+
+<div class="grid2">
+  <div class="prosbox good">
+    <h3>✓ Cái hay</h3>
+    <ul class="clean">
+      <li><b>Phân tầng theo độ thời sự là insight đắt giá.</b> Việc gán Q &amp; α khác nhau cho news/10-Q/10-K phản ánh đúng bản chất "vòng đời tác động" của từng loại dữ liệu tài chính — điều mà các agent QA-based bỏ qua.</li>
+      <li><b>Khả năng diễn giải (interpretability) cao.</b> Mọi quyết định đều kèm lý do văn bản + ID memory event cụ thể → ngược lại hoàn toàn với "black box" của DRL.</li>
+      <li><b>Cognitive span điều chỉnh được.</b> Qua K, agent vượt giới hạn 7±2 của con người mà vẫn lọc nhiễu — một lợi thế "siêu nhân" có kiểm soát.</li>
+      <li><b>Self-adaptive risk thông minh &amp; rẻ.</b> Chuyển khẩu vị chỉ dựa trên dấu của cumulative return — đơn giản nhưng hiệu quả như cơ chế cắt lỗ.</li>
+      <li><b>Access counter tạo bộ nhớ tự tiến hóa.</b> Event tốt được "thưởng" +5 và thăng tầng, mô phỏng quá trình củng cố trí nhớ (memory consolidation) rất tự nhiên.</li>
+      <li><b>Hiệu quả dữ liệu.</b> Chỉ cần 6–12 tháng dữ liệu nhờ tận dụng tốt cả text lẫn số, phù hợp công ty mới IPO (data ít).</li>
+    </ul>
+  </div>
+
+  <div class="prosbox bad">
+    <h3>✗ Chưa hay / Hạn chế thiết kế</h3>
+    <ul class="clean">
+      <li><b>Quá nhiều hằng số "magic number".</b> Q={14,90,365}, α={0.9,0.967,0.988}, v={40,60,80}, ngưỡng purge=5, +5 access... đều đặt thủ công, thiếu cơ sở học từ dữ liệu → khó tổng quát sang thị trường/khung thời gian khác.</li>
+      <li><b>Importance dùng hàm xác suất ngẫu nhiên.</b> v lấy giá trị 40/60/80 theo phân phối xác suất cố định — yếu tố ngẫu nhiên này làm điểm importance thiếu tính tất định &amp; khó tái lập (cần chạy 5 lần lấy trung bình).</li>
+      <li><b>Single-agent chịu tải nhận thức lớn.</b> Một LLM phải vừa summarize, observe, reflect, decide cho mọi nguồn dữ liệu → áp lực lên context window (chính FinCon sau này chỉ trích điểm này).</li>
+      <li><b>Chỉ giao dịch 1 cổ phiếu, 1 share.</b> Hành động rời rạc Buy/Sell/Hold trên đúng 1 share — không hỗ trợ position sizing, danh mục (portfolio), hay short-selling rõ ràng.</li>
+      <li><b>Rủi ro chỉ định nghĩa qua cumulative return ngắn hạn.</b> Không dùng thước đo rủi ro định lượng chuẩn (VaR/CVaR/volatility) → kiểm soát rủi ro dài hạn còn thô.</li>
+      <li><b>Cứng nhắc khi map dữ liệu vào tầng.</b> News luôn vào shallow, 10-K luôn vào deep — không có cơ chế xử lý một tin tức "đột biến" đáng lẽ phải ở tầng sâu.</li>
+      <li><b>Phụ thuộc nặng vào năng lực LLM nền.</b> Ablation cho thấy davinci-003 &amp; Llama2-70b kém hẳn — framework chỉ phát huy với GPT-4 cấp trở lên (chi phí cao, context dài).</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card tint" style="margin-top:24px">
+<p><b>Kết tinh thiết kế:</b> FinMem là một bước nhảy về <i>kiến trúc nhận thức</i> cho trading agent — biến LLM từ vai trò "hỏi-đáp" thành một agent có <b>trí nhớ phân tầng tự tiến hóa</b>. Hạn chế lớn nhất nằm ở việc nó vẫn là single-agent với nhiều tham số thủ công và mô hình rủi ro đơn giản — đây cũng chính là những điểm mà framework kế nhiệm <b>FinCon</b> được sinh ra để khắc phục.</p>
+</div>
+
+<footer>
+  Tài liệu phân tích cấu trúc framework FinMem · Biên soạn cho XNO_Quant<br>
+  Nguồn: Yu et al., "FinMem: A Performance-Enhanced LLM Trading Agent with Layered Memory and Character Design", arXiv:2311.13743v2
+</footer>
+
+</div>
+</body>
+</html>
