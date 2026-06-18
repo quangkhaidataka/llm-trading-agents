@@ -6,3 +6,7 @@ mypy==1.18.2
 pytest==8.4.2
 pydantic==2.12.3
 python-dotenv==1.2.1
+# Data layer (M1+) needs these to import & test offline (load_prices, read_or_fetch/Parquet).
+pandas==2.2.3
+numpy==2.4.4
+pyarrow==23.0.1

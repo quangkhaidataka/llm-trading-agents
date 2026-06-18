@@ -7,11 +7,12 @@ _Last updated: 2026-06-18_
 
 ## Current State
 
-Milestone **M0 (Setup)** complete. Repo scaffold, config, A2A schemas, agent/graph/backtest/eval
-stubs, the harness (`.claude/` rules + agents + skills, `docs/`, `Makefile`, `features.json`), and
-offline fixtures are in place. `make setup` + `make check` pass on the empty project (smoke + e2e
-tests green). No business logic is implemented — every `src/` function raises `NotImplementedError`
-tagged with its milestone.
+Milestone **M1 in progress** — **S11 (data ingestion & caching) done**. The data layer's loaders
+(`load_news`/`load_macro_news`/`load_prices`), the AV news adapter + yfinance price adapter, the
+`read_or_fetch` Parquet cache, and `--mode download` (prints a point-in-time data snapshot) are
+implemented and tested offline. `make check` green (9 unit + e2e); `--mode download --offline` runs.
+Next in M1: **S12** (`compute_indicators` + the `Observation`/`get_observation` gate) and **S13**
+(no-lookahead tests). M0 (Setup) is complete (scaffold + harness).
 
 ## Completed
 
@@ -22,10 +23,13 @@ tagged with its milestone.
 - M0 · `Makefile` (`setup`/`check`/...), `pyproject.toml`, `requirements*.txt`.
 - M0 · Passing scaffold tests: `tests/test_smoke.py`, `tests/test_e2e_smoke.py`.
 - M0 · Git initialized; clean initial checkpoint committed; Bootstrap Contract checklist passed.
+- M1 · **S11 (data layer)**: `src/data/{cache,alpha_vantage,yahoo}.py` + loaders + `download()`;
+  `tests/test_loaders.py` green; F03 `passing` (offline); ADR-003. yfinance prices / AV news.
 
 ## In Progress
 
-- _none_ — M0 closed; awaiting kickoff of M1.
+- M1 · **S12** next — `compute_indicators` + `Observation` methods + `get_observation` gate (then S13
+  flips `tests/test_no_lookahead.py` from `xfail` to green → F02).
 
 ## Blocked
 

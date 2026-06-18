@@ -17,6 +17,33 @@ Template:
 
 ---
 
+## ADR-003 · S11 data layer: yfinance prices / AV news, stdlib timestamp parse, loader snapshot
+- **Date:** 2026-06-18
+- **Status:** accepted
+- **Decision:** Implemented S11 with two adapters — `src/data/yahoo.py` (prices, key-free) and
+  `src/data/alpha_vantage.py` (news only) — behind `read_or_fetch` (Parquet cache-aside) and the three
+  Repository loaders. Three small choices made during implementation:
+  (1) **`--mode download` prints a point-in-time data snapshot** (the inputs an `Observation` is built
+  from), not a full rendered `Observation` — because `Observation`/`compute_indicators`/`get_observation`
+  belong to **S12**. The full Observation print lands in S12 (avoids a circular dependency).
+  (2) **stdlib `datetime.strptime`** parses AV's fixed `YYYYMMDDTHHMMSS` format instead of adding
+  `python-dateutil` — one fewer dependency (the plan had listed dateutil).
+  (3) **Loaders cap at `config.max_news_per_day`** (newest-first) so a daily decision sees recent
+  headlines rather than all news since 2022; `relevance_cutoff` applies to AAPL only, never macro.
+  Also: added `pandas/numpy/pyarrow` to `requirements-dev.txt` (the offline data tests need them) and
+  `yfinance>=0.2.40,<0.3` to `requirements.txt`; aligned pandas/numpy/pyarrow pins to installable
+  versions (2.2.3 / 2.4.4 / 23.0.1).
+- **Reason:** Stay within the substep's scope (don't pull S12 forward), keep dependencies minimal
+  (`follow-the-plan`), and bound per-day news to something an agent can actually read. A version range
+  for yfinance (an unofficial scraper) is more robust than a brittle exact pin.
+- **Rejected alternatives:** building a partial `Observation` in S11 (hacky, half-built object);
+  `python-dateutil` (unneeded for AV's fixed format); returning all news `<= t` uncapped (unbounded,
+  unrealistic for a daily decision).
+- **Consequences:** S11 plan doc reconciled to say "data snapshot (full Observation in S12)". F03 →
+  `passing` (offline). The live online `--mode download` is pending the user's one-time premium run
+  (monthly windows, `sort=LATEST`, `limit=1000`; dense months may truncate at 1000 — acceptable, the
+  relevance filter trims overflow). `data/SPY_prices.parquet` path is derived per-symbol.
+
 ## ADR-002 · Memory reward = AAPL-drift-demeaned return, not SPY-adjusted (corrects spec §7.1)
 - **Date:** 2026-06-18
 - **Status:** accepted

@@ -29,7 +29,9 @@ def main() -> None:
         config.offline = True
 
     if args.mode == "download":
-        raise NotImplementedError("M1: download + cache AV data to Parquet")
+        from src.data.loaders import download
+
+        download()
     elif args.mode == "backtest":
         from src.backtest.run_backtest import run_backtest
 

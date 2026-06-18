@@ -9,9 +9,11 @@ OHLCV, no API key required). On top of those we put a tiny **cache helper** (`re
 the result to Parquet exactly once and reads from disk forever after. Finally we implement the three
 **Repository loaders** (`load_news`, `load_macro_news`, `load_prices`) that decide — based on
 `config.offline` — whether to call the live adapters or read the bundled fixtures, and we wire the
-`python -m src.main --mode download` flow that triggers the one-time live download and prints a single
-rendered `Observation` as proof of life. After this sub-step, every byte the system will ever reason
-about lives on disk in a clean, point-in-time-sliceable shape.
+`python -m src.main --mode download` flow that triggers the one-time live download and prints a
+point-in-time **data snapshot** (the inputs an `Observation` is built from — news/macro/price) as proof
+of life. (The full rendered `Observation`, with indicators, prints in S12 once `get_observation` exists.)
+After this sub-step, every byte the system will ever reason about lives on disk in a clean,
+point-in-time-sliceable shape.
 
 ## Inputs and Outputs
 **Inputs**
@@ -34,7 +36,8 @@ about lives on disk in a clean, point-in-time-sliceable shape.
   lowercase columns `date, open, high, low, close, volume`.
 - New modules: `src/data/alpha_vantage.py`, `src/data/yahoo.py`, `src/data/cache.py`.
 - Implemented loaders in `src/data/loaders.py` (`load_news`, `load_macro_news`, `load_prices`).
-- `python -m src.main --mode download` writes all four caches and prints one rendered `Observation`.
+- `python -m src.main --mode download` writes all four caches and prints a point-in-time data snapshot
+  (Observation inputs; full Observation in S12).
 
 ## Skeleton Python Code
 ```python
@@ -148,19 +151,19 @@ deliberate exception to filtering: it never applies the relevance cutoff, keepin
   deterministic.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m src.main --mode download --offline` runs clean and
-      prints one rendered `Observation`; `make test` green.
-- [ ] **Tests:** loader tests for `load_news` / `load_macro_news` / `load_prices` and `read_or_fetch`
+- [x] **Acceptance command:** `.venv/bin/python -m src.main --mode download --offline` runs clean and
+      prints a point-in-time data snapshot (Observation inputs; full Observation in S12); `make test` green.
+- [x] **Tests:** loader tests for `load_news` / `load_macro_news` / `load_prices` and `read_or_fetch`
       pass under `Config(offline=True)` (fixtures only, no keys/network); each loader slices `<= t`
       before returning; `read_or_fetch` is idempotent (second call hits disk, never the adapter).
-- [ ] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e); no new lint/type errors.
-- [ ] **features.json:** `F03` → `passing` with evidence (commit hash / passing
+- [x] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e); no new lint/type errors.
+- [x] **features.json:** `F03` → `passing` with evidence (commit hash / passing
       `--mode download --offline` run).
-- [ ] **Artifacts:** online run writes `data/{ticker}_news.parquet`, `data/macro_news.parquet`,
+- [ ] **Artifacts:** (online-only — pending live `--mode download`) writes `data/{ticker}_news.parquet`, `data/macro_news.parquet`,
       `data/{ticker}_prices.parquet`, `data/SPY_prices.parquet` (Parquet, lowercase OHLCV cols).
-- [ ] **Rules:** point-in-time slice `<= t` in every loader; macro news **never** relevance-filtered;
+- [x] **Rules:** point-in-time slice `<= t` in every loader; macro news **never** relevance-filtered;
       AV used for news only (price stays key-free yfinance); ticker-dynamic (no hardcoded `AAPL`);
       all knobs (`relevance_cutoff`, `max_news_per_day`, `cache_dir`, ...) in `config.py`, not inline;
       offline parity (online cache and offline fixtures yield the same shape).
-- [ ] **Tracking:** `PROGRESS.md` updated; `DECISIONS.md` ADR for the AV-news / yfinance-prices split;
+- [x] **Tracking:** `PROGRESS.md` updated; `DECISIONS.md` ADR for the AV-news / yfinance-prices split;
       any new config knobs (e.g. `cache_dir`, `fixtures_dir`) recorded.
