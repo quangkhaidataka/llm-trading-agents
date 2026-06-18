@@ -24,7 +24,9 @@ Next in M1: **S12** (`compute_indicators` + the `Observation`/`get_observation` 
 - M0 · Passing scaffold tests: `tests/test_smoke.py`, `tests/test_e2e_smoke.py`.
 - M0 · Git initialized; clean initial checkpoint committed; Bootstrap Contract checklist passed.
 - M1 · **S11 (data layer)**: `src/data/{cache,alpha_vantage,yahoo}.py` + loaders + `download()`;
-  `tests/test_loaders.py` green; F03 `passing` (offline); ADR-003. yfinance prices / AV news.
+  `tests/test_loaders.py` green; ADR-003. yfinance prices / AV news.
+- M1 · **Live data downloaded** (2026-06-19, AV Premium, ~2 min) → `data/*.parquet` (~7 MB, gitignored):
+  AAPL_news 10,904 + macro_news 10,214 + AAPL/SPY prices 1,119 each, 2022-01→2026-06-18. F03 `passing`.
 
 ## In Progress
 

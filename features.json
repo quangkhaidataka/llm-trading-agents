@@ -23,7 +23,7 @@
       "behavior": "Data download + Parquet cache for AAPL news, macro news (by topic), price, and SPY; offline mode reads fixtures.",
       "verification": ".venv/bin/python -m src.main --mode download --offline",
       "state": "passing",
-      "evidence": "S11 implemented (loaders + AV/yahoo adapters + read_or_fetch); offline run prints data snapshot; tests/test_loaders.py green; make check green @ 2026-06-18. Live online --mode download pending user run."
+      "evidence": "S11 implemented (loaders + AV/yahoo adapters + read_or_fetch); tests/test_loaders.py + make check green @ 2026-06-18. LIVE download done @ 2026-06-19 (~2 min, AV Premium): AAPL_news 10,904 rows + macro_news 10,214 (2022-01..2026-06-18) + AAPL/SPY prices 1,119 each → data/*.parquet (~7 MB, gitignored)."
     },
     {
       "id": "F04",
