@@ -7,17 +7,17 @@ _Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M4 (Walk-forward backtest) in progress** — M3 complete; **S41 (backtester + dollar
-accounting) done**. `src/backtest/run_backtest.py` owns a custom dollar P&L loop: opens C0=$1M,
-**capped-notional** sizing (`min($1M, equity)` set at entry), **t+1 execution** (a forward think pass via
-`run_one_day` + a pure `_run_accounting` pass where yesterday's target executes today), fee on position
-change (flip=double), mark-to-market equity vs buy&hold. Writes
-`results/{equity_curve.csv,trace.json,decisions_log.csv,metrics.json}` (gitignored). Offline fixtures
-extended with ~45 2025 sessions so `--mode backtest --offline` runs the default window (45 sessions,
-exits 0). `tests/test_backtest.py` (t+1, fee-on-change, flip-double, capped-notional, full run) green;
-`make check` green (70 unit + e2e). **F12 passing.** **Next in M4: S42** — the metrics module
-(Sharpe/MaxDD/turnover/avg-holding net of fees) + equity-curve chart, enriching `metrics.json`. Live run
-needs `make setup-full`.
+Milestone **M4 (Walk-forward backtest) COMPLETE** — M3 done; **S41 (backtester + dollar accounting) and
+S42 (metrics + equity chart) done**. `src/backtest/run_backtest.py` owns a custom dollar P&L loop (C0=$1M,
+**capped-notional** sizing, **t+1 execution**, fee on change with flip=double, mark-to-market vs buy&hold).
+`src/backtest/metrics.py` computes total_return/sharpe/sortino/**max_drawdown (/C0 convention)**/hit_rate/
+turnover/avg_holding_period on the fixed $1M base net of fees + the buy&hold trio, and `plot_equity` writes
+`results/equity_curve.png` (strategy vs buy&hold from $1M, on-chart stats box). A backtest writes
+`results/{equity_curve.csv,trace.json,decisions_log.csv,metrics.json,equity_curve.png}`. `matplotlib`
+added to dev venv. `tests/test_backtest.py` + `tests/test_metrics.py` green; `make check` green (82 unit +
+e2e). **F12 passing — M4 acceptance met (equity curve + metrics, PnL net of fees).** **Next: M5 / Step 5**
+— calibration (conviction Layer 3), baselines (buy&hold / single-agent / AV-sentiment), and the ablation
+suite. Live run needs `make setup-full`.
 
 ## Completed
 
@@ -67,11 +67,14 @@ needs `make setup-full`.
   `run_backtest`) — capped-notional, t+1 execution, fee-on-change (flip=double), equity vs buy&hold;
   `results/` artifacts; offline 2025 fixture slice; `initial_capital`/`position_sizing`/`results_dir`
   in config; ADR-012. `tests/test_backtest.py` 6 passed. **F12 passing.**
+- M4 · **S42 (metrics + equity chart)**: `src/backtest/metrics.py` — fixed-$1M-base returns, Sharpe/
+  Sortino/**MaxDD (/C0)**/hit_rate/turnover/avg_holding + buy&hold trio; `plot_equity` → equity_curve.png;
+  `matplotlib` in dev venv; ADR-013. `tests/test_metrics.py` 12 passed. **F12 passing. M4 complete.**
 
 ## In Progress
 
-- M4 · **S42** next — metrics module (Sharpe, MaxDD, turnover, avg holding period; PnL net of fees) +
-  equity-curve chart; enrich `results/metrics.json`. Closes M4.
+- M5 · **S51** next (Step 5) — conviction calibration (Layer 3: isotonic/Platt on 2022-2024 + reliability
+  diagram), baselines (buy&hold / single-agent / AV-sentiment), and the ablation suite.
 
 ## Blocked
 

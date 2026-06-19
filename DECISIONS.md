@@ -17,6 +17,34 @@ Template:
 
 ---
 
+## ADR-013 · S42 metrics: /C0 drawdown convention, fixed-base returns, matplotlib in dev venv
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** `src/backtest/metrics.py` computes every metric on the **fixed base C0 = initial_capital**,
+  net of fees — never a moving equity denominator. Daily return is `r[t] = ΔE / C0`, so Sharpe/Sortino on
+  `r[t]` equal the Sharpe of the raw dollar P&L (annualized √252). **Max drawdown uses the non-standard
+  `/ INITIAL CAPITAL` convention**: `dd[t] = (E[t] - peak$[t]) / C0`, exposed as the key
+  **`max_drawdown_over_c0`** (explicitly labeled) because it reads DEEPER than the conventional `/peak`
+  (e.g. -20% where /peak says -18%). `compute_metrics` bundles total_return, sharpe, sortino,
+  max_drawdown_over_c0, hit_rate, turnover (mean |Δposition| with a prepended flat so an open counts and a
+  flip = 2), avg_holding_period (one-sided run length), plus the same headline trio for buy & hold
+  (`C0·P[t]/P[0]`). `plot_equity` draws strategy vs buy & hold from the shared $1M origin with an on-figure
+  stats box → `results/equity_curve.png`. **`matplotlib==3.10.7` added to the dev venv** (Agg/headless) so
+  the chart is written + tested in `make check`. The metric functions are pure (Series in → number out),
+  reused unchanged by the backtest, the S5 ablations, and the S6 notebook. vectorbt is NOT used (its /peak
+  drawdown + full-compounding differ from our conventions) — optional toy cross-check only.
+- **Reason:** Computing on the fixed $1M base (not moving equity) and the labeled `/C0` drawdown keep the
+  scorecard internally consistent with the capped-notional account (ADR-012) and honest about reading
+  deeper than `/peak`. Pure functions keep the same scorecard logic shared across milestones.
+- **Rejected alternatives:** `/peak` drawdown (standard but understates risk relative to the capped $1M
+  base — and inconsistent with the account); returns on moving equity (would double-count the cap);
+  vectorbt `Portfolio.stats()` as source of record (different conventions); generating the chart lazily
+  outside `make check` (then the PNG path/format would go untested).
+- **Consequences:** matplotlib in the dev venv; `results/equity_curve.png` + the enriched `metrics.json`
+  (Sharpe/Sortino/MaxDD/hit_rate/turnover/avg_holding + buy&hold trio) are written every backtest. F12
+  evidence updated; **M4 (walk-forward backtest) complete**. S5 baselines/ablations and the S6 report
+  reuse these metric functions and the chart unchanged.
+
 ## ADR-012 · S41 backtester: own dollar loop (capped notional, t+1), offline 2025 fixture slice
 - **Date:** 2026-06-19
 - **Status:** accepted

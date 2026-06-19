@@ -91,5 +91,7 @@ def test_backtest_runs_offline_and_writes_artifacts(tmp_path, monkeypatch) -> No
 
     assert result["metrics"]["sessions"] > 0
     assert result["metrics"]["initial_capital"] == 1_000_000.0
-    for name in ("equity_curve.csv", "trace.json", "metrics.json", "decisions_log.csv"):
+    assert "max_drawdown_over_c0" in result["metrics"]  # S42 risk metrics present
+    for name in ("equity_curve.csv", "trace.json", "metrics.json", "decisions_log.csv",
+                 "equity_curve.png"):
         assert (tmp_path / "results" / name).exists(), name

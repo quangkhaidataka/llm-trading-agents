@@ -154,9 +154,13 @@ class Backtester:
         # 2) ACCOUNT in dollars (t+1 execution, capped notional, fee on change).
         records = self._run_accounting(dates, prices, targets, traces, convictions)
 
-        # 3) METRICS (minimal here; S4.2 adds Sharpe/MaxDD/turnover/avg-holding + chart).
-        metrics = self._basic_metrics(records)
-        self._write_artifacts(records, metrics)
+        # 3) METRICS + equity chart (S4.2), on the fixed $1M base, net of fees.
+        idx = [r.t for r in records]
+        equity = pd.Series([r.equity for r in records], index=idx, dtype=float)
+        position = pd.Series([r.position for r in records], index=idx, dtype=float)
+        price = pd.Series([r.price for r in records], index=idx, dtype=float)
+        metrics = self._metrics(records, equity, position, price)
+        self._write_artifacts(records, metrics, equity, price)
 
         equity_rows = [{"date": r.t.isoformat(), "equity": r.equity,
                         "cum_pnl_strategy": r.cum_pnl_strategy,
@@ -164,25 +168,25 @@ class Backtester:
         return {"equity": equity_rows, "metrics": metrics,
                 "trace": [self._trace_row(r) for r in records]}
 
-    # ── metrics (basic; enriched in S4.2) ───────────────────────────────────────
-    def _basic_metrics(self, records: list[DayRecord]) -> dict:
+    # ── metrics: dollar-accounting scorecard on the fixed $1M base ──────────────
+    def _metrics(self, records, equity, position, price) -> dict:
         if not records:
             return {"sessions": 0, "note": "no sessions in test window"}
-        last = records[-1]
-        n_trades = sum(1 for r in records if r.fee > 0)
-        return {
+        from src.backtest.metrics import compute_metrics
+
+        metrics = compute_metrics(equity, position, price, self.C0)
+        metrics.update({
             "sessions": len(records),
-            "initial_capital": self.C0,
-            "final_equity": last.equity,
-            "total_return": last.equity / self.C0 - 1.0,
-            "cum_pnl_strategy": last.cum_pnl_strategy,
-            "cum_pnl_buyhold": last.cum_pnl_buyhold,
-            "n_trades": n_trades,
+            "final_equity": records[-1].equity,
+            "cum_pnl_strategy": records[-1].cum_pnl_strategy,
+            "cum_pnl_buyhold": records[-1].cum_pnl_buyhold,
+            "n_trades": sum(1 for r in records if r.fee > 0),
             "total_fees": sum(r.fee for r in records),
-        }
+        })
+        return metrics
 
     # ── persistence ─────────────────────────────────────────────────────────────
-    def _write_artifacts(self, records: list[DayRecord], metrics: dict) -> None:
+    def _write_artifacts(self, records: list[DayRecord], metrics: dict, equity, price) -> None:
         import csv
 
         out = self.config.results_dir
@@ -208,6 +212,12 @@ class Backtester:
 
         with open(os.path.join(out, "metrics.json"), "w") as fh:
             json.dump(metrics, fh, indent=2)
+
+        if records:  # equity_curve.png — strategy vs buy & hold, both from $1M
+            from src.backtest.metrics import buy_and_hold, plot_equity
+
+            plot_equity(equity, buy_and_hold(price, self.C0), metrics,
+                        os.path.join(out, "equity_curve.png"))
 
     def _trace_row(self, r: DayRecord) -> dict:
         row = dict(r.trace)

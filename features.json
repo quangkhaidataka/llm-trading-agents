@@ -95,7 +95,7 @@
       "behavior": "Walk-forward backtest over 2025-2026 with transaction fees on every position change produces an equity curve + metrics (Sharpe, MaxDD, turnover, avg holding period), PnL net of fees, execution at t+1.",
       "verification": ".venv/bin/python -m src.main --mode backtest --offline",
       "state": "passing",
-      "evidence": "S41 @ 2026-06-19: Backtester walk-forward over the test window — capped-notional dollar accounting (notional=min($1M,equity) set at entry), t+1 execution, fee on position change (flip=double), equity curve + buy&hold; writes results/{equity_curve.csv,trace.json,decisions_log.csv,metrics.json}. `--mode backtest --offline` runs 45 sessions, exits 0. tests/test_backtest.py (t+1 / fee-on-change / flip-double / capped-notional / full run) 6 passed; make check green (70 unit + e2e). Risk metrics (Sharpe/MaxDD/turnover/avg-holding) + equity chart land in S42."
+      "evidence": "S41+S42 @ 2026-06-19: Backtester walk-forward — capped-notional dollar accounting, t+1 execution, fee on change (flip=double); src/backtest/metrics.py computes total_return/sharpe/sortino/max_drawdown(/C0)/hit_rate/turnover/avg_holding_period on the fixed $1M base net of fees + the buy&hold trio, and writes results/{equity_curve.csv,trace.json,decisions_log.csv,metrics.json,equity_curve.png}. `--mode backtest --offline` runs 45 sessions, exits 0. tests/test_backtest.py (6) + tests/test_metrics.py (12) passed; make check green (82 unit + e2e). M4 complete."
     },
     {
       "id": "F13",

@@ -141,10 +141,10 @@ re-render without recomputing.
 
 ## Definition of Done
 
-- [ ] **Acceptance command:** metrics unit test green — `.venv/bin/python -m pytest tests/test_metrics.py -q` (also exercised end-to-end via `--mode backtest`, which writes `results/metrics.json` + `results/equity_curve.png`).
-- [ ] **Tests:** offline + deterministic toy-series test with hand-calculated expectations: assert **MaxDD** `= min((E[t] − peak$[t]) / C0)` (drawdown divided by INITIAL CAPITAL, not `/peak`), assert **Sharpe** on fixed-base returns `r[t] = ΔE / C0` (annualized `√252`) matches the hand calc, and cover `total_return`, `sortino`, `hit_rate`, `turnover` (ties out with S4.1 fee-on-change count), `avg_holding_period` (position run-length); optionally cross-check the *standard* Sharpe/Sortino/MDD against vectorbt on the toy series.
-- [ ] **Gate:** `make check` (lint + typecheck + test + e2e) green.
-- [ ] **features.json:** F12 → `passing` with evidence (metrics test + acceptance command output + `make check` date).
-- [ ] **Artifacts:** writes `results/equity_curve.png` — **strategy vs buy & hold** (both from $1M, buy & hold = `C0·P[t]/P[0]`) with an on-chart stats box showing each line's **total return / Sharpe / MaxDD**; consumes `results/equity_curve.csv` from S4.1.
-- [ ] **Rules:** every metric on the fixed $1M base (`C0`) net of fees — never a moving equity denominator; MaxDD divided by INITIAL CAPITAL and **labeled** as the `/C0` convention (reads deeper than `/peak`); computed only over the 2025–2026 test window; `initial_capital` sourced from config, not hardcoded; vectorbt used for cross-check only, never as source of record.
-- [ ] **Tracking:** `PROGRESS.md` updated; `DECISIONS.md` ADR for the `/C0` (initial-capital) drawdown convention.
+- [x] **Acceptance command:** `pytest tests/test_metrics.py -q` → 12 passed; also exercised via `--mode backtest --offline`, which writes `results/metrics.json` + `results/equity_curve.png`. ✅ 2026-06-19
+- [x] **Tests:** offline + deterministic toy series with hand-calc expectations — **MaxDD** `= min((E-peak$)/C0)` (asserted < the `/peak` value → reads deeper); **Sharpe** on `r=ΔE/C0` (√252) cross-checked vs stdlib `statistics`; plus `total_return`, `sortino`, `hit_rate`, `turnover` (flip=2), `avg_holding_period` (run-length), buy&hold, and a `plot_equity` PNG-write smoke.
+- [x] **Gate:** `make check` green (ruff + mypy 24 files + 82 unit + e2e).
+- [x] **features.json:** F12 → `passing` (evidence updated for S41+S42).
+- [x] **Artifacts:** writes `results/equity_curve.png` — strategy vs buy & hold (both from $1M, buy&hold = `C0·P[t]/P[0]`) with an on-chart stats box (total return / Sharpe / MaxDD per line).
+- [x] **Rules:** every metric on the fixed $1M base (`C0`) net of fees; MaxDD `/C0` and **labeled** `max_drawdown_over_c0` (reads deeper than `/peak`); only the test window; `initial_capital` from config; vectorbt NOT used (cross-check only).
+- [x] **Tracking:** PROGRESS.md updated; ADR-013 (`/C0` drawdown convention, fixed-base returns, matplotlib in dev venv).

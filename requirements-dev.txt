@@ -23,3 +23,6 @@ faiss-cpu==1.13.0
 # Orchestration layer (M3 S33) — the LangGraph per-day state machine must build + run offline
 # in make check. Lightweight (pure-python on langchain-core; no torch). ADR-011.
 langgraph==0.6.10
+# Backtest metrics/chart (M4 S42) — the equity-curve PNG is written + tested in make check
+# (Agg backend, headless). No torch. ADR-013.
+matplotlib==3.10.7
