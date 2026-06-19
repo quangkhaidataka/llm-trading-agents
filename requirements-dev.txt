@@ -20,3 +20,6 @@ langchain-core==0.3.79
 # torch, numpy-2.x OK). The heavy embedding model (sentence-transformers -> torch) is the
 # ONLY part mocked offline (deterministic hash embedder); it stays in requirements.txt. ADR-009.
 faiss-cpu==1.13.0
+# Orchestration layer (M3 S33) — the LangGraph per-day state machine must build + run offline
+# in make check. Lightweight (pure-python on langchain-core; no torch). ADR-011.
+langgraph==0.6.10

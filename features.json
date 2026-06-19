@@ -78,8 +78,8 @@
       "milestone": "M3",
       "behavior": "LangGraph orchestration runs one day end-to-end and carries PortfolioState (position + thesis) across days.",
       "verification": ".venv/bin/python -m pytest tests/test_graph.py -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S33 @ 2026-06-19: build_graph compiles observe -> [news,macro,technical,memory] (parallel) -> debate -> conviction(z) -> position_manager -> commit; run_one_day yields a valid TradeDecision, carries PortfolioState across days, writes per-day trace JSON to log_dir, and drives stage(t)->flush_due(t) point-in-time. Ablation flags bypass nodes over the same graph. `pytest tests/test_graph.py` 5 passed; check-lookahead audit clean; make check green (64 unit + e2e). M3 acceptance met."
     },
     {
       "id": "F11",

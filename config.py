@@ -81,6 +81,13 @@ class Config:
     temperature: float = 0.0               # decision agents; debate uses >0 for §7.3
     debate_temperature: float = 0.7        # DebateAgent self-consistency sampling (§7.3, Layer 2)
 
+    # ── Ablations (Step 5 — one Config toggle over the SAME graph) ───────────
+    use_memory: bool = True                # False → MemoryAgent returns empty context
+    use_macro: bool = True                 # False → MacroAgent bypassed (neutral regime)
+    use_debate: bool = True                # False → stance from deterministic signal aggregation
+    use_hysteresis: bool = True            # wired in S5 (no-hysteresis ablation)
+    stateless: bool = False                # True → ignore PortfolioState (daily-classifier baseline)
+
     # ── Runtime ─────────────────────────────────────────────────────────────
     offline: bool = False                  # True → MockLLM + fixtures, no network
     seed: int = 42

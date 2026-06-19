@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## ADR-011 · S33 LangGraph orchestration: fixed topology + flag-driven nodes, langgraph in dev venv
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** `build_graph` compiles a **fixed-topology** LangGraph: `observe → [news, macro, technical,
+  memory] (parallel fan-out) → debate → conviction → position_manager → commit`. The parallel analysts
+  write **distinct** `GraphState` keys so LangGraph's default merge needs no reducer. **Ablation flags
+  change what nodes PRODUCE, not the graph shape** (`use_macro=False` → neutral MacroSignal;
+  `use_memory=False` → empty MemoryContext; `use_debate=False` → deterministic `_fallback_stance` from
+  news+technical aggregation) — one Config toggle over the same graph, never a code fork.
+  `langgraph==0.6.10` added to the dev venv (pure-python on langchain-core, no torch). Several
+  S33-specific wiring choices: (1) the conviction node passes the **raw score z** (composite +
+  self-consistency) to the PositionManager as `conviction`; the Step-5 Layer-3 calibrator (z→P) slots in
+  front later. (2) **memory_consistency** = share of retrieved closed analogs with reward>0 (0.5 if
+  none); **disagreement** = directional disagreement of the non-flat news/technical votes
+  (1=opposed, 0=aligned); **realized_vol** = `obs.indicators['vol20']` (NaN→0). (3) **drawdown is passed
+  as 0.0** in S33 — the equity-curve drawdown veto is wired by the backtest (S4). (4) `observe` is a
+  fan-out anchor; `run_one_day` performs the single `get_observation` (it also needs obs to stage), seeds
+  the graph, mutates `PortfolioState` in place for t+1 (unless `stateless`), then `stage(t)`→`flush_due(t)`.
+  `commit` writes a full per-day trace JSON to `config.log_dir/{ticker}_{t}.json` (Step-6 report source).
+- **Reason:** Fixed topology + node-level flags keep the ablations as the spec wants (one toggle, same
+  graph) and the wiring testable; using `run_one_day` for the single observation avoids fetching it twice
+  and threading `t` through `GraphState`. langgraph is light, so it belongs in the test runtime (same
+  pattern as langchain-core/faiss, ADR-007/009).
+- **Rejected alternatives:** conditional edges / multiple compiled graphs per ablation (a code fork — the
+  thing the flag design avoids); computing the calibrated P here (needs 2022-2024 history — Step 5);
+  tracking equity/drawdown in the graph (that is the backtest's job — keeps the graph stateless per day).
+  `use_hysteresis` ablation behavior is deferred to S5 (flag defined; PositionManager threshold handling
+  designed alongside the ablation harness).
+- **Consequences:** Dev venv now carries langgraph; a live run still needs `make setup-full`. Ablation
+  flags `use_memory/use_macro/use_debate/use_hysteresis/stateless` added to `config.py`. F10 → `passing`;
+  **M3 complete** (one day → TradeDecision; PortfolioState across days; point-in-time memory). S4 will
+  loop `run_one_day` over 2025-2026 with fees, real drawdown, and t+1 execution.
+
 ## ADR-010 · S32 PositionManager: two new veto knobs + flip-blocked-closes-to-flat
 - **Date:** 2026-06-19
 - **Status:** accepted

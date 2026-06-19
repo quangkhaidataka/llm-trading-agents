@@ -117,22 +117,19 @@ become the explainable record the Step-6 web report reads.
   `run_one_day` enforces stage(t)/flush(t+1+h)/retrieve(closed) ordering across days.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_graph.py -q` green.
-- [ ] **Tests:** offline & deterministic (`Config(offline=True)`, `MockLLM` + fixtures, no network);
-  one day end-to-end → a **valid `TradeDecision`** and `PortfolioState` updated for `t+1`
-  (`current_position`/`active_thesis`/`days_held` advance, carried across days); the four analysts fan
-  out from `observe` and `debate` joins on all four; memory side effects fire in order —
-  `store.stage(t)` then `store.flush_due(t)` — and remain **point-in-time** (no future-dated retrieval).
-- [ ] **Gate:** `make check` green (graph smoke is the M3 acceptance: one day yields a `TradeDecision`,
-  memory writes/reads point-in-time).
-- [ ] **features.json:** F10 (LangGraph one-day end-to-end + PortfolioState across days) set to
-  `passing` with evidence (command + date).
-- [ ] **Artifacts:** per-day decision trace JSON written to `config.log_dir/{ticker}_{t}.json`
-  (news + each agent's signal/rationale + debate bull/bear/thesis + conviction breakdown + final
-  decision/reason); `log_dir` gitignored.
-- [ ] **Rules:** run the **check-lookahead** audit on the orchestration (delayed-write ordering
-  stage→flush→retrieve-closed preserved across `run_one_day`; no `mcp__`/live-SDK/`requests` in `src/` —
-  data only via `get_observation`); execution at `t+1`, never `t`; numbers only in `config.py`.
-- [ ] **Tracking:** PROGRESS.md updated; DECISIONS.md ADR if graph wiring is a non-obvious choice; note
-  the ablation feature flags (`use_memory/use_macro/use_debate/use_hysteresis/stateless`) added to
-  config here for Step 5, with flag-bypassed nodes covered.
+- [x] **Acceptance command:** `pytest tests/test_graph.py -q` → 5 passed. ✅ 2026-06-19
+- [x] **Tests:** offline & deterministic (`Config(offline=True)`, MockLLM + md5 embedder + fixtures, no
+  network); one day end-to-end → **valid `TradeDecision`** with `PortfolioState` mutated for `t+1` and
+  carried across two days; four analysts fan out + `debate` joins on all four; memory side effects fire
+  in order `store.stage(t)` → `store.flush_due(t)` and stay point-in-time (staged episode NOT retrievable
+  same day).
+- [x] **Gate:** `make check` green (ruff + mypy 23 files + 64 unit + e2e) — M3 acceptance met.
+- [x] **features.json:** F10 → `passing` with evidence.
+- [x] **Artifacts:** per-day trace JSON → `config.log_dir/{ticker}_{t}.json` (news + each agent
+  signal/rationale + debate bull/bear/thesis + conviction + decision/reason); `log_dir` gitignored.
+- [x] **Rules:** check-lookahead audit clean — `stage(t)`→`flush_due(t)` after the decision, `flush_due`
+  slices prices ≤ t, retrieve closed-only; no `mcp__`/live-SDK/`requests` in `src/graph` (data only via
+  `get_observation`/`load_prices`); execution staged for `t+1`; numbers in `config.py`.
+- [x] **Tracking:** PROGRESS.md updated; ADR-011 (fixed topology + flag-driven nodes + langgraph dev dep).
+  Ablation flags `use_memory/use_macro/use_debate/use_hysteresis/stateless` added to config; bypass of
+  macro/memory/debate covered by `test_ablation_flags_bypass_nodes`; `use_hysteresis` behavior deferred to S5.

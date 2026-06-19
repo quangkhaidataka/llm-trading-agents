@@ -7,17 +7,18 @@ _Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M3 (Memory · Decision · Orchestration) in progress** — M2 complete; **S31 (episodic memory)
-and S32 (PositionManager) done**. `MemoryStore` is a real FAISS `IndexFlatIP` with strict point-in-time
-delayed write (stage→flush_due→retrieve; drift-demeaned reward; md5 hash embedder offline). The
-`PositionManager` (`src/agents/position_manager.py`) is a pure deterministic rule engine: **veto first**
-(vol/drawdown/macro risk_off/macro_risk/disagreement) then **asymmetric hysteresis** on the calibrated
-conviction (tau_enter/exit/flip) → `TradeDecision`; the enter↔exit dead-band gives low turnover. Added
-`macro_risk_cap`/`disagreement_cap` knobs. `tests/test_position_manager.py` covers the full
-current_position×signal table + veto-overrides-strong-signal. `make check` green (59 unit + e2e).
-**F07/F09/F11 passing.** **Next in M3: S33** (LangGraph orchestration — wires the 6 agents + memory +
-PositionManager into one graph carrying `PortfolioState` across days → one end-to-end `TradeDecision`;
-closes M3). Live run needs `make setup-full` (langchain-groq + langgraph + sentence-transformers).
+Milestone **M3 (Memory · Decision · Orchestration) COMPLETE** — S31 (episodic FAISS memory), S32
+(PositionManager), and **S33 (LangGraph orchestration) done**. `build_graph` compiles the per-day state
+machine `observe → [news, macro, technical, memory] (parallel) → debate → conviction(z) →
+position_manager → commit`; `run_one_day` yields one end-to-end `TradeDecision`, carries `PortfolioState`
+across days, writes a full per-day decision trace to `log_dir` (the Step-6 report source), and drives the
+memory `stage(t)→flush_due(t)` point-in-time rhythm. Ablation flags
+(`use_memory/use_macro/use_debate/use_hysteresis/stateless`) added to config — they change what nodes
+produce, not the graph shape. `langgraph` added to the dev venv. `tests/test_graph.py` green;
+check-lookahead audit clean; `make check` green (64 unit + e2e). **F10 passing — M3 acceptance met (one
+day → TradeDecision; PortfolioState across days; point-in-time memory).** **Next: M4 / Step 4** — the
+walk-forward backtest over 2025-2026 (loop `run_one_day`, fees on position change, t+1 execution, real
+drawdown, equity curve + metrics net of fees). Live run needs `make setup-full`.
 
 ## Completed
 
@@ -59,12 +60,15 @@ closes M3). Live run needs `make setup-full` (langchain-groq + langgraph + sente
 - M3 · **S32 (PositionManager)**: `src/agents/position_manager.py` — deterministic veto-first +
   asymmetric hysteresis → `TradeDecision`; added `macro_risk_cap`/`disagreement_cap`; ADR-010.
   `tests/test_position_manager.py` (full transition table + veto) 16 passed. **F09 passing.**
+- M3 · **S33 (LangGraph orchestration)**: `src/graph/build_graph.py` (`build_graph` + `run_one_day`) —
+  parallel analysts → debate → conviction(z) → PositionManager → commit; per-day trace JSON;
+  stage/flush memory rhythm; ablation flags added to config; `langgraph` in dev venv; ADR-011.
+  `tests/test_graph.py` 5 passed. **F10 passing. M3 complete.**
 
 ## In Progress
 
-- M3 · **S33** next — LangGraph orchestration: wire News/Macro/Technical/Memory → Debate → conviction
-  (z) → PositionManager into one graph carrying `PortfolioState` across days; `run_one_day` calls
-  `stage`/`flush_due`; one end-to-end `TradeDecision` (F10). Closes M3.
+- M4 · **S41** next (Step 4) — walk-forward backtest: loop `run_one_day` over 2025-2026, fees on every
+  position change, execute at t+1, real drawdown into the veto, equity curve + metrics net of fees (F12).
 
 ## Blocked
 
