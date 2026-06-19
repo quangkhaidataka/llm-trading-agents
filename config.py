@@ -31,6 +31,7 @@ class Config:
     # ── Data filtering / limiting ───────────────────────────────────────────
     relevance_cutoff: float = 0.3          # drop AAPL news below this relevance
     max_news_per_day: int = 10
+    no_news_confidence: float = 0.5        # NewsAgent flat default on a no-news day (rubric "no edge")
     macro_topics: tuple[str, ...] = (
         "economy_monetary",
         "economy_macro",

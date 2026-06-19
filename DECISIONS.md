@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## ADR-007 · S22 analyst agents: langchain-core in dev venv, MockLLM stays chain-composable
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** The canonical agent chain is `prompt | llm.with_structured_output(Schema)`, which needs
+  `ChatPromptTemplate` (from `langchain_core`). Since the offline agent tests build that chain in the
+  **dev** `.venv`, **`langchain-core==0.3.79` is added to `requirements-dev.txt`** (pinned to match
+  `requirements.txt`). It is lightweight (pydantic/tenacity/langsmith — no torch/faiss); the heavy
+  `langchain-groq` backbone stays online-only with a function-local import. `MockLLM` itself remains
+  **langchain-free**: `_StructuredRunnable` gained a `__call__` so a LangChain prompt coerces it to a
+  `RunnableLambda` on `|` — `src/llm.py` imports no langchain and `test_llm.py` still needs none. The
+  `ChatPromptTemplate` import is **function-local** inside each agent's `_build_chain` (coding-style).
+  Three smaller choices: (1) **PLAN fix #4** — `NewsSignal`/`MacroSignal`/`TechnicalSignal` reordered so
+  `rationale` is the **first** field (schema order = generation order → reason-first). Field is named
+  `rationale` (not the plan example's `reasoning`) to match the existing schemas + S21 fixtures. (2) The
+  `TechnicalAgent` prompt uses `obs.render_indicators()` (one `{indicators}` slot) rather than hand-listing
+  each indicator — the plan's own Inputs say the render helpers feed the prompts, and it avoids
+  duplicating the data-layer's NaN-aware formatter. (3) A no-news day **short-circuits** the NewsAgent to
+  `NewsSignal(signal=flat, sentiment=0, confidence=config.no_news_confidence=0.5)` without calling the
+  LLM — nothing to reason about, and it makes the empty-news case deterministic offline.
+- **Reason:** The plan + architecture mandate the LCEL chain shape and offline determinism; the chain
+  cannot be built without langchain-core, so it belongs in the test runtime (same pattern as ADR-001/003
+  adding pandas/ta). Keeping `MockLLM` langchain-free preserves the S21 seam (ADR-006) and a clean
+  `src/llm.py`. The 0.5 default is the rubric's explicit "no edge" point, so it is a definition, not a
+  magic number — and it lives in `config.py`.
+- **Rejected alternatives:** subclassing `langchain_core.Runnable` in `MockLLM` (couples the offline
+  seam to langchain, contradicts ADR-006); installing full `langchain`/`langchain-groq` in the dev venv
+  (heavy, unnecessary offline); hand-listing indicators in the prompt (duplicates the formatter);
+  asking the LLM about an empty news set (nondeterministic, wasteful).
+- **Consequences:** Dev venv now carries langchain-core; `make setup-full` (full stack) still required
+  for a live online run. Reordering the analyst schemas is a protocol change — fixtures construct by
+  keyword so they are unaffected; no conformance test existed, `tests/test_agents.py` now covers schema
+  conformance. F04/F05/F06 → `passing`. S23's DebateAgent will reuse the same BaseAgent + chain shape.
+
 ## ADR-006 · S21 MockLLM fixture contract: keyed by Schema.__name__, lists, seeded cycling
 - **Date:** 2026-06-19
 - **Status:** accepted

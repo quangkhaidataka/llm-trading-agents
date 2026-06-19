@@ -12,3 +12,7 @@ pandas==2.2.3
 numpy==2.4.4
 pyarrow==23.0.1
 ta==0.11.0
+# Agent layer (M2+) needs langchain-core offline to build ChatPromptTemplate + the LCEL
+# `prompt | ...` chain. Lightweight (no torch/faiss); the heavy langchain-groq backbone
+# stays in requirements.txt (online only, function-local import). See ADR-007.
+langchain-core==0.3.79

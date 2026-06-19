@@ -30,24 +30,24 @@
       "milestone": "M2",
       "behavior": "NewsAgent reads AAPL news and returns a valid NewsSignal (idiosyncratic channel).",
       "verification": ".venv/bin/python -m pytest tests/test_agents.py -k news -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S22 @ 2026-06-19: NewsAgent (LCEL prompt | MockLLM.with_structured_output(NewsSignal)) returns valid NewsSignal on a fixture day; no-news day short-circuits to flat/no-edge. `pytest -k news` 2 passed; make check green."
     },
     {
       "id": "F05",
       "milestone": "M2",
       "behavior": "MacroAgent reads macro-by-topic news + SPY trend and returns a valid MacroSignal (systematic channel; never relevance-filtered).",
       "verification": ".venv/bin/python -m pytest tests/test_agents.py -k macro -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S22 @ 2026-06-19: MacroAgent returns valid MacroSignal (regime/macro_risk/drivers) from render_macro() (never relevance-filtered) + spy_trend; schema has no per-asset signal field (channel hygiene). `pytest -k macro` 1 passed; make check green."
     },
     {
       "id": "F06",
       "milestone": "M2",
       "behavior": "TechnicalAgent interprets precomputed indicators and returns a valid TechnicalSignal (no number fabrication).",
       "verification": ".venv/bin/python -m pytest tests/test_agents.py -k technical -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S22 @ 2026-06-19: TechnicalAgent interprets obs.render_indicators() (numbers computed in the data layer, never by the LLM) → valid TechnicalSignal. `pytest -k technical` 1 passed; make check green."
     },
     {
       "id": "F07",

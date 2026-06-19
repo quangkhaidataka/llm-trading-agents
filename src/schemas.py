@@ -22,30 +22,37 @@ class PortfolioState(BaseModel):
 
 
 class NewsSignal(BaseModel):
-    """NewsAgent — idiosyncratic / AAPL-specific channel."""
+    """NewsAgent — idiosyncratic / AAPL-specific channel.
 
+    `rationale` is first so the model REASONS before it commits (schema order =
+    generation order; spec §5, PLAN fix #4)."""
+
+    rationale: str
+    sentiment: float = Field(ge=-1.0, le=1.0)
     signal: Literal["long", "flat", "short"]
     confidence: float = Field(ge=0.0, le=1.0)
-    sentiment: float = Field(ge=-1.0, le=1.0)
-    rationale: str
 
 
 class MacroSignal(BaseModel):
-    """MacroAgent — systematic / macro channel (routes to risk veto)."""
+    """MacroAgent — systematic / macro channel (routes to risk veto).
 
+    `rationale` first (reason-first generation; PLAN fix #4)."""
+
+    rationale: str
     regime: Literal["risk_on", "neutral", "risk_off"]
     macro_risk: float = Field(ge=0.0, le=1.0)   # today's systematic risk level
     drivers: list[str]                          # e.g. ["Fed meeting", "Iran tensions"]
-    rationale: str
 
 
 class TechnicalSignal(BaseModel):
-    """TechnicalAgent — interprets precomputed indicators (no number-crunching)."""
+    """TechnicalAgent — interprets precomputed indicators (no number-crunching).
 
+    `rationale` first (reason-first generation; PLAN fix #4)."""
+
+    rationale: str
     signal: Literal["long", "flat", "short"]
     confidence: float = Field(ge=0.0, le=1.0)
     indicators: dict
-    rationale: str
 
 
 class MemoryContext(BaseModel):

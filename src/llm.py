@@ -39,6 +39,13 @@ class _StructuredRunnable:
         self._calls += 1
         return self.schema(**data)
 
+    # Callable so a LangChain prompt can pipe straight into it offline
+    # (`prompt | runnable` coerces a plain callable to a RunnableLambda) — keeps
+    # this class langchain-free while staying chain-composable. Mirrors ChatGroq's
+    # structured-output runnable, which is itself invoked with the prompt value.
+    def __call__(self, _input: Any) -> Any:
+        return self.invoke(_input)
+
 
 class MockLLM:
     """Offline stand-in: returns canned schema responses from fixtures.

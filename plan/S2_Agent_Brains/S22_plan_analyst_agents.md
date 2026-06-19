@@ -145,10 +145,10 @@ apples rather than three differently-scaled gut feelings.
   only one sampled at `temperature>0`, for self-consistency.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_agents.py -k "news or macro or technical" -q` green (per-agent: `-k news` → F04, `-k macro` → F05, `-k technical` → F06).
-- [ ] **Tests (offline & deterministic):** with `Config(offline=True)` (MockLLM + `fixtures/llm_responses.json`), each agent's `run(obs, state)` returns its correct Pydantic schema on **one fixture day** — `NewsAgent`→`NewsSignal`, `MacroAgent`→`MacroSignal`, `TechnicalAgent`→`TechnicalSignal` — all fields valid/in-range; empty-news day → `NewsSignal(signal=flat, sentiment≈0, low confidence)`.
-- [ ] **Channel/hygiene cases:** MacroAgent fed from the topic feed, **never relevance-filtered**, and forms no AAPL-specific view; TechnicalAgent only interprets the provided indicators (no fabricated numbers).
-- [ ] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e).
-- [ ] **features.json:** F04, F05, F06 → `passing` with evidence (the matching `pytest -k` command output).
-- [ ] **Rules:** LCEL `prompt | llm.with_structured_output(Schema)` in `_build_chain` (never hand-parse JSON); model only via `make_llm`; `temperature=0`; offline parity (agents never branch on `config.offline`); System prompts parameterized by `{ticker}`/`{t}` with the mandatory anti-leak line — no hardcoded `"AAPL"`; thresholds/limits only in config.
-- [ ] **Tracking:** `PROGRESS.md` updated; note PLAN fix #4 — `src/schemas.py` analyst schemas reordered so `reasoning`/`rationale` is the **first** field (reason-first generation order), with conformance tests adjusted.
+- [x] **Acceptance command:** `.venv/bin/python -m pytest tests/test_agents.py -k "news or macro or technical" -q` green (4 passed); per-agent `-k news` (2) → F04, `-k macro` (1) → F05, `-k technical` (1) → F06. ✅ 2026-06-19
+- [x] **Tests (offline & deterministic):** with `Config(offline=True)` (MockLLM + `fixtures/llm_responses.json`), each `run(obs, state)` returns its schema on a fixture day — `NewsAgent`→`NewsSignal`, `MacroAgent`→`MacroSignal`, `TechnicalAgent`→`TechnicalSignal`, fields in range; empty-news day → `NewsSignal(signal=flat, sentiment≈0, confidence=0.5)`.
+- [x] **Channel/hygiene cases:** MacroAgent reads `render_macro()` (topic feed, **never relevance-filtered**) and the `MacroSignal` schema has no per-asset signal field; TechnicalAgent only interprets `render_indicators()` (numbers come from the data layer, never the LLM).
+- [x] **Gate:** `make check` green (ruff + mypy 23 files + 29 unit + e2e).
+- [x] **features.json:** F04, F05, F06 → `passing` with `pytest -k` evidence.
+- [x] **Rules:** LCEL `prompt | llm.with_structured_output(Schema)` in `_build_chain` (no hand-parsed JSON); model only via `make_llm`; `temperature=0` (no sampling here); no `config.offline` branch in agents; System prompts parameterized by `{ticker}`/`{t}` with the anti-leak line; numbers (`no_news_confidence`) in config.
+- [x] **Tracking:** `PROGRESS.md` updated; PLAN fix #4 applied — `NewsSignal`/`MacroSignal`/`TechnicalSignal` reordered `rationale`-first; `tests/test_agents.py` covers schema conformance; ADR-007 records langchain-core/dev-venv + render/short-circuit choices.

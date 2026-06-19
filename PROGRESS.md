@@ -7,15 +7,16 @@ _Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M2 (Agent brains) in progress** — **S21 (LLM factory + MockLLM) done**. `make_llm(config)`
-is the sole model-instantiation seam: offline → deterministic `MockLLM`, online → `ChatGroq` (Groq
-only; the OpenAI branch was removed per the plan). Both expose the same
-`with_structured_output(Schema)` surface; `MockLLM` reads `fixtures/llm_responses.json` (keyed by
-`Schema.__name__`, lists for seeded variation) and yields validated Pydantic instances, with a seeded
-action spread that feeds S23 self-consistency. `tests/test_llm.py` green; `make check` green (25 unit +
-e2e). M1 (Data layer) is complete. **Next in M2: S22** (News/Macro/Technical analyst agents) then
-**S23** (Debate agent + conviction layers 1–2). Offline work needs only `make setup`; a live online run
-still needs `make setup-full` (langchain_groq).
+Milestone **M2 (Agent brains) in progress** — **S21 (LLM factory + MockLLM) and S22 (analyst agents)
+done**. `make_llm(config)` is the sole model seam (offline `MockLLM` / online Groq). The three analysts
+— News/Macro/Technical — are built as `BaseAgent` subclasses whose `_build_chain` returns the LCEL chain
+`ChatPromptTemplate | llm.with_structured_output(Schema)` (reason-first prompts + shared
+`CONFIDENCE_RUBRIC`); each `run(obs, state)` renders the `Observation` and returns its validated schema.
+`langchain-core` added to the dev venv so the chain builds offline; `MockLLM` stays langchain-free
+(`_StructuredRunnable.__call__` lets a prompt pipe into it). Analyst schemas reordered `rationale`-first
+(PLAN fix #4). `tests/test_agents.py` green; `make check` green (29 unit + e2e). **F04/F05/F06 passing.**
+**Next: S23** (DebateAgent + conviction layers 1–2). A live online run still needs `make setup-full`
+(langchain-groq).
 
 ## Completed
 
@@ -42,11 +43,15 @@ still needs `make setup-full` (langchain_groq).
 - M2 · **S21 (LLM factory + MockLLM)**: Groq-only `make_llm` (OpenAI branch removed); `MockLLM` +
   `_StructuredRunnable` mirror `with_structured_output`; fixture re-keyed by `Schema.__name__` (lists);
   seeded cycling index → deterministic yet varied; `tests/test_llm.py` green; ADR-006. Enables F04–F08.
+- M2 · **S22 (analyst agents)**: `src/agents/{prompts,news,macro,technical}.py` — LCEL chains via
+  `BaseAgent`; reason-first v2 prompts + `CONFIDENCE_RUBRIC`; no-news short-circuit; analyst schemas
+  reordered `rationale`-first; `langchain-core` added to dev venv (ADR-007). `tests/test_agents.py`
+  green. **F04/F05/F06 passing.**
 
 ## In Progress
 
-- M2 · **S22** next — News/Macro/Technical analyst agents (`prompt | llm.with_structured_output(Schema)`),
-  smoke-tested offline on one fixture day (F04, F05, F06).
+- M2 · **S23** next — DebateAgent (Bull→Bear→thesis-check→action → `ResearchStance`) + conviction
+  layers 1–2 (composite signals + self-consistency sampling at `temperature>0`). Closes M2 (F08).
 
 ## Blocked
 
