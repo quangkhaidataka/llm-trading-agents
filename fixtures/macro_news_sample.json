@@ -16,5 +16,23 @@
     "summary": "Escalating tensions added a risk-off tone across global markets.",
     "time_published": "20240530T100000",
     "topics": ["economy_macro"]
+  },
+  {
+    "title": "Inflation print comes in line with expectations",
+    "summary": "Headline CPI matched forecasts, keeping the soft-landing narrative intact.",
+    "time_published": "20240515T123000",
+    "topics": ["economy_macro"]
+  },
+  {
+    "title": "Equities rally as megacap earnings reassure investors",
+    "summary": "Broad indices advanced on strong large-cap results and steady guidance.",
+    "time_published": "20240426T150000",
+    "topics": ["financial_markets"]
+  },
+  {
+    "title": "Central bank minutes show split on timing of first cut",
+    "summary": "Meeting minutes revealed divided views on when easing should begin.",
+    "time_published": "20240410T180000",
+    "topics": ["economy_monetary"]
   }
 ]

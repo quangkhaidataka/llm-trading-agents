@@ -128,20 +128,18 @@ met.
   field > t") across all days, which is the right shape for a leakage guard.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_no_lookahead.py -q` green (M1
+- [x] **Acceptance command:** `.venv/bin/python -m pytest tests/test_no_lookahead.py -q` green (M1
       acceptance), with the `xfail` marker removed; one day's `Observation` prints via
-      `.venv/bin/python -m src.main --mode download --offline`.
-- [ ] **Tests:** `tests/test_no_lookahead.py` sweeps **every** trading day `t` in the fixtures and
-      asserts the invariant "for every `t`, `get_observation(t)` has no timestamp `> t`" (AAPL news,
+      `.venv/bin/python -m src.main --mode download --offline`. ✅ 2026-06-19
+- [x] **Tests:** `tests/test_no_lookahead.py` sweeps **every** trading day `t` in the fixtures (41
+      sessions) and asserts "for every `t`, `get_observation(t)` has no timestamp `> t`" (AAPL news,
       macro news, `obs.t`); `tests/test_observation.py` green; all run under `Config(offline=True)` —
-      deterministic, no keys/network; `_as_date` parses AV `YYYYMMDDTHHMMSS` exactly like the loader.
-- [ ] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e); no new lint/type errors.
-- [ ] **features.json:** `F02` and `F03` → `passing` with evidence (commit hash / green
-      `test_no_lookahead`); M1 milestone acceptance satisfied.
-- [ ] **Fixtures:** enlarged to ~40 sessions — `fixtures/prices_sample.csv`
+      deterministic, no keys/network; `_as_date` reuses `loaders._to_date` (exact loader parity).
+- [x] **Gate:** `make check` green (ruff + mypy + pytest 16 unit + e2e); no new lint/type errors.
+- [x] **features.json:** `F02` → `passing` (`F03` already passing); evidence recorded; M1 acceptance met.
+- [x] **Fixtures:** enlarged to 41 sessions — `fixtures/prices_sample.csv`
       (`date,open,high,low,close,volume,spy_close`), `fixtures/AAPL_news_sample.json`,
-      `fixtures/macro_news_sample.json` (dated, committed) so the sweep exercises warm-up edges.
-- [ ] **Rules:** point-in-time `<= t` proven across all `t`; no `shift(-1)`/`bfill`/centered window
-      slips caught by the sweep; macro never relevance-filtered; offline parity; ticker-dynamic.
-- [ ] **Tracking:** `PROGRESS.md` updated (M1 done); `DECISIONS.md` ADR if a non-obvious fixture or
-      test-design choice was made.
+      `fixtures/macro_news_sample.json` (dated, committed); last 12 price rows kept verbatim.
+- [x] **Rules:** point-in-time `<= t` proven across all `t`; no `shift(-1)`/`bfill`/centered window
+      in `src/` (audited); macro never relevance-filtered; offline parity; ticker-dynamic.
+- [x] **Tracking:** `PROGRESS.md` updated (M1 done); `DECISIONS.md` ADR-005 added (fixture/test-design).

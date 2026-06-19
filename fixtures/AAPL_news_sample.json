@@ -19,5 +19,40 @@
     "time_published": "20240531T201000",
     "relevance": 0.74,
     "av_sentiment": -0.18
+  },
+  {
+    "title": "Apple Services revenue tipped to set a new record",
+    "summary": "Analysts expect Services to hit an all-time high, cushioning hardware seasonality.",
+    "time_published": "20240522T143000",
+    "relevance": 0.81,
+    "av_sentiment": 0.27
+  },
+  {
+    "title": "Broad market roundup mentions Apple among megacaps",
+    "summary": "A market-wide wrap referenced Apple briefly alongside other large-cap names.",
+    "time_published": "20240515T160000",
+    "relevance": 0.18,
+    "av_sentiment": 0.05
+  },
+  {
+    "title": "Apple expands manufacturing footprint in India",
+    "summary": "Reports indicate Apple is widening its India production base to diversify supply.",
+    "time_published": "20240502T101500",
+    "relevance": 0.77,
+    "av_sentiment": 0.19
+  },
+  {
+    "title": "Apple beats on earnings, announces record buyback",
+    "summary": "Apple topped estimates and unveiled a large share-repurchase authorization.",
+    "time_published": "20240425T210000",
+    "relevance": 0.95,
+    "av_sentiment": 0.41
+  },
+  {
+    "title": "Sector note lists Apple in passing among tech peers",
+    "summary": "An industry note name-checked Apple without ticker-specific analysis.",
+    "time_published": "20240411T120000",
+    "relevance": 0.21,
+    "av_sentiment": 0.02
   }
 ]

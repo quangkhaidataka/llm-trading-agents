@@ -17,6 +17,27 @@ Template:
 
 ---
 
+## ADR-005 · S13 anti-lookahead sweep + enlarged fixtures (S11 test counts updated)
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** `tests/test_no_lookahead.py` now sweeps **every** session date in
+  `fixtures/prices_sample.csv` (the universe of `t`) rather than one happy-path day, asserting "no field
+  dated > t" for AAPL news, macro news, and `obs.t`; the `xfail` marker is removed and `_as_date`
+  delegates to `loaders._to_date` so the test parses timestamps **exactly** like the loader. Fixtures
+  enlarged to **41 sessions** (2024-04-09..2024-06-05): the last 12 rows are kept **verbatim** (so the
+  S12 `tests/test_observation.py` assertions — e.g. close@2024-06-05 = 195.90 — stay valid), with 29
+  earlier business days prepended so the sweep exercises warm-up edges. AAPL/macro news fixtures gained
+  earlier-dated items (two AAPL items below the 0.3 cutoff, to exercise the relevance filter).
+- **Reason:** A property/invariant sweep across all `t` is the correct shape for a leakage guard — it
+  catches an off-by-one slice, a stray `bfill`, or a centered window the moment it appears, which a
+  single-date test cannot. Reusing `_to_date` guarantees test/production date agreement (DoD).
+- **Rejected alternatives:** keeping the single-`t` test (weak guard); adding `python-dateutil` for
+  `_as_date` (the loader already parses AV's fixed format with stdlib — ADR-003 — so reuse it);
+  regenerating the whole price series (would churn the S12 assertions for no benefit).
+- **Consequences:** Enlarging the fixtures changed the offline counts the S11 `tests/test_loaders.py`
+  hard-coded, so those assertions were recomputed to the new fixtures (loaders **unchanged**). F02 →
+  `passing`; M1 (data layer) acceptance — "`test_no_lookahead` green; one observation prints" — is met.
+
 ## ADR-004 · S12 indicator conventions (annualized vol, SPY trend, NaN warm-up)
 - **Date:** 2026-06-19
 - **Status:** accepted

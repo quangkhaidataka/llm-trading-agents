@@ -3,16 +3,17 @@
 > Living snapshot for session handoff. Update at session end via the `update-progress` skill.
 > Use absolute dates. Mirror `features.json` — never list something Completed below `passing`.
 
-_Last updated: 2026-06-18_
+_Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M1 in progress** — **S11 (data ingestion & caching) done**. The data layer's loaders
-(`load_news`/`load_macro_news`/`load_prices`), the AV news adapter + yfinance price adapter, the
-`read_or_fetch` Parquet cache, and `--mode download` (prints a point-in-time data snapshot) are
-implemented and tested offline. `make check` green (9 unit + e2e); `--mode download --offline` runs.
-Next in M1: **S12** (`compute_indicators` + the `Observation`/`get_observation` gate) and **S13**
-(no-lookahead tests). M0 (Setup) is complete (scaffold + harness).
+Milestone **M1 (Data layer) COMPLETE** — S11 (ingestion+cache), S12 (indicators + `Observation`/
+`get_observation` gate), and **S13 (anti-lookahead sweep + enlarged fixtures) done**. The single
+point-in-time gate is built and proven: `tests/test_no_lookahead.py` sweeps all 41 fixture sessions
+asserting no field dated > t (xfail removed). `make check` green (16 unit + e2e); `--mode download
+--offline` prints a snapshot. M1 acceptance met. **Next: M2** — the agent brains (Step 2: `make_llm`
+factory + MockLLM, then News/Macro/Technical agents, Debate agent, conviction layers 1–2). Needs
+`make setup-full` (heavy LLM stack) before M2 code runs.
 
 ## Completed
 
@@ -30,12 +31,15 @@ Next in M1: **S12** (`compute_indicators` + the `Observation`/`get_observation` 
 
 - M1 · **S12 (indicators + Observation gate)**: `compute_indicators` + `compute_spy_trend` + frozen
   `Observation` (render/to_dict/`__post_init__`) + `get_observation`; `tests/test_observation.py` green;
-  verified on real cached data (2026-06-18); ADR-004. F02 `active` (→ `passing` in S13).
+  verified on real cached data (2026-06-18); ADR-004.
+- M1 · **S13 (anti-lookahead sweep + fixtures)**: `tests/test_no_lookahead.py` sweeps all 41 fixture
+  sessions (`_as_date` reuses `loaders._to_date`, `xfail` removed); fixtures enlarged to 41 sessions
+  (last 12 rows kept verbatim) + spread of dated news; S11 loader-test counts recomputed; ADR-005.
+  F02 → `passing`. **M1 acceptance met.**
 
 ## In Progress
 
-- M1 · **S13** next — finalize `tests/test_no_lookahead.py` (implement `_as_date`, remove `xfail`,
-  parametrize over many `t`), enlarge `fixtures/` to ~40 sessions → flips F02 `passing`.
+- _M1 complete; M2 (agent brains) not started._
 
 ## Blocked
 
@@ -44,15 +48,14 @@ Next in M1: **S12** (`compute_indicators` + the `Observation`/`get_observation` 
 ## Known Issues
 
 - Heavy runtime stack (langchain, faiss, vectorbt, ta, sentence-transformers) is NOT installed by
-  `make setup`; use `make setup-full`. It is unneeded until M1. (vectorbt + numpy 2.x compatibility
-  to be confirmed during M1 — see DECISIONS.)
-- `tests/test_no_lookahead.py` is `xfail` until M1 implements `get_observation`.
+  `make setup`; use `make setup-full`. Needed from M2 onward. (vectorbt + numpy 2.x compatibility
+  to be confirmed at first `make setup-full` — see DECISIONS.)
 - `requirements.txt` pins are first-pass; may need adjustment at first `make setup-full`.
 
-## Next Steps (M1 · Data layer)
+## Next Steps (M2 · Agent brains — Step 2 in PLAN.md)
 
-1. Implement `load_prices` + `compute_indicators` (deterministic `ta`; no `shift(-1)`).
-2. Implement `load_news` / `load_macro_news` (AV + Parquet cache; macro NOT relevance-filtered).
-3. Implement `get_observation` enforcing the point-in-time invariant; offline branch reads `fixtures/`.
-4. Remove the `xfail` from `tests/test_no_lookahead.py` and make it green.
-5. `python -m src.main --mode download` caches data; print one day's observation. Update `features.json`.
+1. `make setup-full`, then `src/llm.py::make_llm(config)` factory + `MockLLM` (offline parity).
+2. News / Macro / Technical agents as `prompt | llm.with_structured_output(Schema)` (LCEL).
+3. State-aware DebateAgent (Bull→Bear→thesis-check→action) → `ResearchStance`.
+4. Conviction layers 1–2 (composite signals + self-consistency sampling).
+5. Smoke test: each agent returns its Pydantic schema on one fixture day (F04–F06, F08).
