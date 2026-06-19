@@ -6,6 +6,7 @@ venv/
 .DS_Store
 data/*.parquet
 data/*.json
+data/sample_data/
 logs/
 .ipynb_checkpoints/
 faiss_index/
