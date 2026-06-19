@@ -7,16 +7,17 @@ _Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M2 (Agent brains) in progress** — **S21 (LLM factory + MockLLM) and S22 (analyst agents)
-done**. `make_llm(config)` is the sole model seam (offline `MockLLM` / online Groq). The three analysts
-— News/Macro/Technical — are built as `BaseAgent` subclasses whose `_build_chain` returns the LCEL chain
-`ChatPromptTemplate | llm.with_structured_output(Schema)` (reason-first prompts + shared
-`CONFIDENCE_RUBRIC`); each `run(obs, state)` renders the `Observation` and returns its validated schema.
-`langchain-core` added to the dev venv so the chain builds offline; `MockLLM` stays langchain-free
-(`_StructuredRunnable.__call__` lets a prompt pipe into it). Analyst schemas reordered `rationale`-first
-(PLAN fix #4). `tests/test_agents.py` green; `make check` green (29 unit + e2e). **F04/F05/F06 passing.**
-**Next: S23** (DebateAgent + conviction layers 1–2). A live online run still needs `make setup-full`
-(langchain-groq).
+Milestone **M2 (Agent brains) COMPLETE** — S21 (LLM factory + MockLLM), S22 (analyst agents), and
+**S23 (DebateAgent + conviction Layers 1-2) done**. `make_llm(config)` is the sole model seam; the four
+agents (News/Macro/Technical analysts + the state-aware Bull/Bear DebateAgent) are `BaseAgent` LCEL
+chains `ChatPromptTemplate | llm.with_structured_output(Schema)` with reason-first prompts. The
+DebateAgent fuses the four signals + `PortfolioState` → `ResearchStance` (continuity bias in the prompt;
+prefers hold), and its `sample()` path feeds the conviction engine (`src/eval/calibration.py`):
+`composite_conviction` (Layer 1), `self_consistency_conviction` (Layer 2), `raw_conviction` (z) — the
+decision number is **math, not the LLM's self-report**. `tests/test_agents.py` + `tests/test_calibration.py`
+green; `make check` green (37 unit + e2e). **F04/F05/F06/F08 passing.** **Next: M3 / Step 3** — FAISS
+memory store + MemoryAgent (delayed t+1+h write), PositionManager (hysteresis + risk veto), LangGraph
+orchestration carrying `PortfolioState` across days. A live online run still needs `make setup-full`.
 
 ## Completed
 
@@ -47,11 +48,15 @@ done**. `make_llm(config)` is the sole model seam (offline `MockLLM` / online Gr
   `BaseAgent`; reason-first v2 prompts + `CONFIDENCE_RUBRIC`; no-news short-circuit; analyst schemas
   reordered `rationale`-first; `langchain-core` added to dev venv (ADR-007). `tests/test_agents.py`
   green. **F04/F05/F06 passing.**
+- M2 · **S23 (DebateAgent + conviction)**: `src/agents/debate.py` (state-aware Bull/Bear → `ResearchStance`,
+  `sample()` for self-consistency, `debate_temperature` knob) + conviction Layers 1-2 in
+  `src/eval/calibration.py`; `ResearchStance` reordered reason-first; fixture hold-first; ADR-008.
+  `tests/test_calibration.py` + debate tests green. **F08 passing. M2 complete.**
 
 ## In Progress
 
-- M2 · **S23** next — DebateAgent (Bull→Bear→thesis-check→action → `ResearchStance`) + conviction
-  layers 1–2 (composite signals + self-consistency sampling at `temperature>0`). Closes M2 (F08).
+- M3 · **S31** next (Step 3) — FAISS `MemoryStore` + `MemoryAgent` with delayed `t+1+h` point-in-time
+  write/retrieval. Then PositionManager (hysteresis + risk veto) and the LangGraph orchestration.
 
 ## Blocked
 

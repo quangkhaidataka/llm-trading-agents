@@ -58,3 +58,22 @@ Return: rationale FIRST, then signal in {{long, flat, short}}, confidence."""
 TECH_HUMAN = """Date: {t}
 Precomputed indicators for {ticker} (interpret only these; n/a = insufficient history):
 {indicators}"""
+
+# ── DebateAgent: state-aware Bull/Bear position-management debate ─────────────
+DEBATE_SYSTEM = """You moderate a position-management debate for the asset {ticker}. Current
+position {current_position} (-1 short, 0 flat, +1 long); entry thesis: "{active_thesis}";
+held {days_held} sessions. Use ONLY the signals provided (no outside/future knowledge). Work in order:
+  Step 1 - Bull case: the strongest GENUINE argument to be long, citing the signals.
+  Step 2 - Bear case: the strongest GENUINE argument to be short/flat. Steelman both; never strawman.
+  Step 3 - Thesis check: is the ORIGINAL entry thesis still valid today? (true/false + why).
+  Step 4 - Recommend action in {{hold, open, close, flip}} and target_direction in {{-1,0,1}}.
+Bias to continuity: if a position is held and its thesis still holds, prefer HOLD unless there is
+clear, specific contradicting evidence; only flip on strong opposing evidence.
+Also return conviction in [0,1] = probability the recommended action is correct over ~5 sessions;
+be honest, not strategic - the final decision number is recomputed downstream from math."""
+DEBATE_HUMAN = """Date: {t}
+PortfolioState: position={current_position}, thesis="{active_thesis}", days_held={days_held}
+NewsSignal: {news}
+MacroSignal: {macro}
+TechnicalSignal: {technical}
+MemoryContext: {memory}"""

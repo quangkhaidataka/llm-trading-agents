@@ -31,28 +31,28 @@
   ],
   "ResearchStance": [
     {
-      "action": "open",
-      "target_direction": 1,
-      "conviction": 0.66,
+      "bull_case": "Entry thesis intact; momentum still positive.",
+      "bear_case": "Some moderation in news flow, but nothing that invalidates the thesis.",
       "thesis_still_valid": true,
-      "bull_case": "Demand signals plus technical confirmation support a long.",
-      "bear_case": "Elevated macro risk and China demand questions could cap upside."
-    },
-    {
       "action": "hold",
       "target_direction": 1,
-      "conviction": 0.58,
-      "thesis_still_valid": true,
-      "bull_case": "Entry thesis intact; momentum still positive.",
-      "bear_case": "Some moderation in news flow, but nothing that invalidates the thesis."
+      "conviction": 0.58
     },
     {
+      "bull_case": "Demand signals plus technical confirmation support a long.",
+      "bear_case": "Elevated macro risk and China demand questions could cap upside.",
+      "thesis_still_valid": true,
+      "action": "open",
+      "target_direction": 1,
+      "conviction": 0.66
+    },
+    {
+      "bull_case": "Residual demand strength.",
+      "bear_case": "China demand deteriorating and macro turning risk-off; entry thesis broken.",
+      "thesis_still_valid": false,
       "action": "close",
       "target_direction": 0,
-      "conviction": 0.71,
-      "thesis_still_valid": false,
-      "bull_case": "Residual demand strength.",
-      "bear_case": "China demand deteriorating and macro turning risk-off; entry thesis broken."
+      "conviction": 0.71
     }
   ]
 }

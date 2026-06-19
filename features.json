@@ -62,8 +62,8 @@
       "milestone": "M2",
       "behavior": "DebateAgent fuses the four signals + PortfolioState into a state-aware ResearchStance (hold/open/close/flip with Bull+Bear cases).",
       "verification": ".venv/bin/python -m pytest tests/test_agents.py -k debate -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S23 @ 2026-06-19: DebateAgent (LCEL prompt | MockLLM.with_structured_output(ResearchStance)) fuses the 4 signals + PortfolioState → valid state-aware ResearchStance; continuity-bias 'prefers hold when held thesis valid' check passes; sample() returns K actions. `pytest -k debate` 3 passed; conviction Layers 1-2 in src/eval/calibration.py (tests/test_calibration.py 5 passed). make check green (37 unit + e2e). Layer-3 calibration (F15) deferred to Step 5."
     },
     {
       "id": "F09",

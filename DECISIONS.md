@@ -17,6 +17,41 @@ Template:
 
 ---
 
+## ADR-008 · S23 DebateAgent + conviction engine: sampling temperature, hold-default fixture
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** The `DebateAgent` reuses the `BaseAgent` LCEL shape (`prompt |
+  llm.with_structured_output(ResearchStance)`) and adds a `sample(...)` path for Layer-2
+  self-consistency. `run` invokes once at `temperature=0`; `sample` builds a **fresh** chain from a
+  config copy (`dataclasses.replace(config, temperature=config.debate_temperature)`, new knob, default
+  **0.7**) and invokes K times. Offline the K-action variation comes from the MockLLM's seeded cycling
+  (ADR-006), not real temperature; a fresh sampling chain per call keeps that cycling deterministic.
+  The conviction engine (`src/eval/calibration.py`) is pure math: `composite_conviction` (Layer 1 =
+  `w1·agreement + w2·mean_confidence + w3·memory_consistency`, with a Σconfidence==0 divide-by-zero
+  guard), `self_consistency_conviction` (Layer 2 = majority-action frequency), `raw_conviction`
+  (`α·raw + β·sc`). Two supporting choices: (1) **PLAN fix #4 applied to `ResearchStance`** — reordered
+  so `bull_case, bear_case, thesis_still_valid` precede `action, target_direction, conviction`
+  (reason-first generation; the stance's own `conviction` is just one input to the math, never the
+  decision number). (2) The fixture's `ResearchStance` list is reordered so the **`hold` stance is
+  index 0** — the representative offline debate outcome — so the "prefers hold when a held thesis stays
+  valid" check is deterministic and the default canned outcome matches the continuity-bias philosophy.
+  The continuity bias itself lives only in the PROMPT, never as a code rule (the deterministic
+  hysteresis is the PositionManager's job in S3).
+- **Reason:** Self-consistency needs `temperature>0` online but must stay deterministic offline — the
+  seeded MockLLM already provides that, so no RNG enters the conviction code (it stays pure/unit-testable).
+  Keeping conviction as math, not the LLM's self-report, is the core §7.3 contribution. The hold-first
+  fixture makes the continuity check meaningful without a conditional mock.
+- **Rejected alternatives:** sampling by shuffling evidence order (adds nondeterminism/complexity;
+  temperature is the standard self-consistency lever — the plan's "(varying evidence order)" parenthetical
+  is dropped as YAGNI); a code-level "force hold" continuity rule (belongs in the prompt + the
+  PositionManager, not the DebateAgent); trusting the LLM's `conviction` field (overconfident/inconsistent
+  — the whole reason the engine exists).
+- **Consequences:** New `config.debate_temperature`. `ResearchStance` reorder is a protocol change
+  (fixtures construct by keyword → unaffected). Conviction Layers 1-2 land now; Layer 3
+  (`fit_calibrator`/`reliability_diagram`, F15) stays a Step-5 stub — it needs the 2022-2024 history.
+  F08 → `passing`; **M2 (agent brains) complete**. S3 will wire these signals + `raw_conviction` z into
+  the PositionManager's τ thresholds.
+
 ## ADR-007 · S22 analyst agents: langchain-core in dev venv, MockLLM stays chain-composable
 - **Date:** 2026-06-19
 - **Status:** accepted

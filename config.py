@@ -77,6 +77,7 @@ class Config:
     provider: str = "groq"                 # "groq" | "openai"
     model_id: str = "llama-3.3-70b-versatile"
     temperature: float = 0.0               # decision agents; debate uses >0 for §7.3
+    debate_temperature: float = 0.7        # DebateAgent self-consistency sampling (§7.3, Layer 2)
 
     # ── Runtime ─────────────────────────────────────────────────────────────
     offline: bool = False                  # True → MockLLM + fixtures, no network

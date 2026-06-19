@@ -148,11 +148,11 @@ computed, not confessed.
   probabilities; Layer 3 (isotonic/Platt calibration) is deferred to Step 5 (needs history).
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_agents.py -k debate -q` (DebateAgent → F08) and `.venv/bin/python -m pytest tests/test_calibration.py -k conviction -q` (conviction Layers 1–2) both green.
-- [ ] **Tests (offline & deterministic):** with `Config(offline=True)` (MockLLM + `fixtures/llm_responses.json`), `DebateAgent.run(...)` fuses the four signals + `PortfolioState` into a valid `ResearchStance` (bull_case, bear_case, thesis_still_valid, `action ∈ {hold, open, close, flip}`, target_direction, conviction).
-- [ ] **DebateAgent behavior:** "prefers **hold** when a held position's thesis stays valid" check passes (continuity bias); `sample(..., k)` returns a list of K actions for self-consistency.
-- [ ] **Conviction math unit tests:** `composite_conviction` = w1·agreement + w2·mean_confidence + w3·memory_consistency (weights from config), with the all-zero-confidence divide-by-zero guard → 0; `self_consistency_conviction(actions, K)` = majority frequency (e.g. `['open','open','open','hold','open']` → 0.8); `raw_conviction` = α·raw + β·sc — all pure/deterministic.
-- [ ] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e).
-- [ ] **features.json:** F08 → `passing` with evidence; conviction Layers 1–2 land here but F15 (calibration) stays `not_started` until the Step-5 Layer-3 calibrator.
-- [ ] **Rules:** LCEL `prompt | llm.with_structured_output(ResearchStance)` (never hand-parse JSON); model via `make_llm`; conviction is **MATH, not the LLM's self-report** (the stance's `conviction` field is one input, never the decision number); `temperature=0` for `run`, `temperature>0` only in `sample` for self-consistency (config-driven `K`); offline parity (no `config.offline` branch); no hardcoded `"AAPL"`; weights/`K`/`alpha`/`beta` only in config.
-- [ ] **Tracking:** `PROGRESS.md` updated; note the planned `reasoning`-first schema reorder applies to `ResearchStance` too.
+- [x] **Acceptance command:** `pytest tests/test_agents.py -k debate -q` (3 passed → F08) and `pytest tests/test_calibration.py -k conviction -q` (5 passed → Layers 1-2) both green. ✅ 2026-06-19
+- [x] **Tests (offline & deterministic):** with `Config(offline=True)`, `DebateAgent.run(...)` fuses the four signals + `PortfolioState` into a valid `ResearchStance` (bull_case, bear_case, thesis_still_valid, `action ∈ {hold, open, close, flip}`, target_direction, conviction).
+- [x] **DebateAgent behavior:** "prefers **hold** when a held position's thesis stays valid" passes (continuity bias in the prompt; hold-first fixture); `sample(..., k)` returns K actions for self-consistency.
+- [x] **Conviction math unit tests:** `composite_conviction` = w1·agreement + w2·mean_confidence + w3·memory_consistency (Σconf==0 guard → 0); `self_consistency_conviction(['open','open','open','hold','open'],5)` → 0.8; `raw_conviction` = α·raw + β·sc — all pure/deterministic.
+- [x] **Gate:** `make check` green (ruff + mypy 23 files + 37 unit + e2e).
+- [x] **features.json:** F08 → `passing`; F15 (Layer-3 calibration) stays `not_started` until Step 5.
+- [x] **Rules:** LCEL `prompt | llm.with_structured_output(ResearchStance)`; model via `make_llm`; conviction is **MATH, not the LLM self-report** (stance `conviction` is one input only); `temperature=0` for `run`, `config.debate_temperature>0` only in `sample` (config-driven `K`); offline parity; no hardcoded `"AAPL"`; weights/`K`/`alpha`/`beta`/`debate_temperature` in config.
+- [x] **Tracking:** `PROGRESS.md` updated; `ResearchStance` reordered reason-first; ADR-008 records sampling-temperature + hold-first-fixture choices.

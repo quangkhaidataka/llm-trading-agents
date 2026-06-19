@@ -63,14 +63,19 @@ class MemoryContext(BaseModel):
 
 
 class ResearchStance(BaseModel):
-    """DebateAgent — decision RELATIVE to the current position."""
+    """DebateAgent — decision RELATIVE to the current position.
 
+    Reason-first order (PLAN fix #4): the bull/bear/thesis REASONING is generated
+    before the model commits to an action/conviction (schema order = generation order).
+    `conviction` here is the LLM's self-report — ONE input to the conviction math, never
+    the decision number (spec §7.3)."""
+
+    bull_case: str
+    bear_case: str
+    thesis_still_valid: bool
     action: Literal["hold", "open", "close", "flip"]
     target_direction: Literal[-1, 0, 1]
     conviction: float = Field(ge=0.0, le=1.0)
-    thesis_still_valid: bool
-    bull_case: str
-    bear_case: str
 
 
 class TradeDecision(BaseModel):

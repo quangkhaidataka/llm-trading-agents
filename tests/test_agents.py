@@ -13,11 +13,19 @@ import pytest
 
 import src.data.loaders as loaders
 from config import Config
+from src.agents.debate import DebateAgent
 from src.agents.macro import MacroAgent
 from src.agents.news import NewsAgent
 from src.agents.technical import TechnicalAgent
 from src.data.loaders import get_observation
-from src.schemas import MacroSignal, NewsSignal, PortfolioState, TechnicalSignal
+from src.schemas import (
+    MacroSignal,
+    MemoryContext,
+    NewsSignal,
+    PortfolioState,
+    ResearchStance,
+    TechnicalSignal,
+)
 
 MATURE = date(2024, 6, 5)       # post-warm-up day with AAPL + macro news
 NO_NEWS = date(2024, 4, 15)     # only the 0.21-relevance item exists → filtered out → empty
@@ -67,3 +75,47 @@ def test_technical_agent_returns_technicalsignal(offline_config: Config) -> None
     assert out.signal in ("long", "flat", "short")
     assert 0.0 <= out.confidence <= 1.0
     assert out.rationale
+
+
+# ── DebateAgent (S23) ────────────────────────────────────────────────────────
+def _four_signals(cfg: Config):
+    """The four analyst signals + a MemoryContext for one fixture day."""
+    obs = get_observation("AAPL", MATURE)
+    news = NewsAgent(cfg).run(obs, PortfolioState())
+    macro = MacroAgent(cfg).run(obs, PortfolioState())
+    technical = TechnicalAgent(cfg).run(obs, PortfolioState())
+    memory = MemoryContext(
+        analogs=["2023-09 launch run-up -> +2.1% abnormal"],
+        lesson="Launch-driven optimism has historically held for ~1 week.",
+    )
+    return obs, news, macro, technical, memory
+
+
+def test_debate_agent_returns_researchstance(offline_config: Config) -> None:
+    obs, news, macro, technical, memory = _four_signals(offline_config)
+    out = DebateAgent(offline_config).run(
+        obs, PortfolioState(current_position=0), news, macro, technical, memory
+    )
+    assert isinstance(out, ResearchStance)
+    assert out.action in ("hold", "open", "close", "flip")
+    assert out.target_direction in (-1, 0, 1)
+    assert 0.0 <= out.conviction <= 1.0
+    assert out.bull_case and out.bear_case
+
+
+def test_debate_agent_prefers_hold_when_thesis_valid(offline_config: Config) -> None:
+    obs, news, macro, technical, memory = _four_signals(offline_config)
+    held = PortfolioState(current_position=1, active_thesis="Launch-driven demand", days_held=3)
+    out = DebateAgent(offline_config).run(obs, held, news, macro, technical, memory)
+    assert out.action == "hold"
+    assert out.thesis_still_valid is True
+
+
+def test_debate_agent_sample_returns_k_actions(offline_config: Config) -> None:
+    obs, news, macro, technical, memory = _four_signals(offline_config)
+    state = PortfolioState(current_position=1, active_thesis="x", days_held=2)
+    actions = DebateAgent(offline_config).sample(
+        obs, state, news, macro, technical, memory, k=offline_config.K
+    )
+    assert len(actions) == offline_config.K
+    assert all(a in ("hold", "open", "close", "flip") for a in actions)
