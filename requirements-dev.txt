@@ -16,3 +16,7 @@ ta==0.11.0
 # `prompt | ...` chain. Lightweight (no torch/faiss); the heavy langchain-groq backbone
 # stays in requirements.txt (online only, function-local import). See ADR-007.
 langchain-core==0.3.79
+# Memory layer (M3+) uses FAISS for the episode index in BOTH modes (3.4 MB wheel, no
+# torch, numpy-2.x OK). The heavy embedding model (sentence-transformers -> torch) is the
+# ONLY part mocked offline (deterministic hash embedder); it stays in requirements.txt. ADR-009.
+faiss-cpu==1.13.0

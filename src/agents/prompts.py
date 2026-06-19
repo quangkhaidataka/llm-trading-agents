@@ -77,3 +77,13 @@ NewsSignal: {news}
 MacroSignal: {macro}
 TechnicalSignal: {technical}
 MemoryContext: {memory}"""
+
+# ── MemoryAgent: distill retrieved closed analogs into one lesson ─────────────
+MEMORY_SYSTEM = """You summarize trading experience for {ticker}. Below are up to {k} PAST situations
+similar to today ({t}), each with the action taken and its ACTUAL realized (drift-demeaned) reward.
+Use ONLY these analogs — no outside or future knowledge. Distill ONE short, practical lesson for today
+(what tended to work or fail in similar setups). Be concise and concrete; do NOT invent analogs.
+Return: analogs (the short bullet strings you were given) and a one-sentence lesson."""
+MEMORY_HUMAN = """Date: {t}
+Similar closed episodes (situation -> action -> realized reward):
+{analogs}"""

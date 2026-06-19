@@ -9,15 +9,18 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
 import pytest
 
 import src.data.loaders as loaders
 from config import Config
 from src.agents.debate import DebateAgent
 from src.agents.macro import MacroAgent
+from src.agents.memory import MemoryAgent
 from src.agents.news import NewsAgent
 from src.agents.technical import TechnicalAgent
-from src.data.loaders import get_observation
+from src.data.loaders import Observation, get_observation
+from src.memory.store import MemoryStore
 from src.schemas import (
     MacroSignal,
     MemoryContext,
@@ -119,3 +122,43 @@ def test_debate_agent_sample_returns_k_actions(offline_config: Config) -> None:
     )
     assert len(actions) == offline_config.K
     assert all(a in ("hold", "open", "close", "flip") for a in actions)
+
+
+# ── MemoryAgent (S31) ────────────────────────────────────────────────────────
+def _populated_store(cfg: Config) -> MemoryStore:
+    """A store with one CLOSED episode (staged early, flushed once its window passed)."""
+    store = MemoryStore(cfg)
+    prices = pd.DataFrame(
+        {"close": [100.0 + i for i in range(40)]},
+        index=pd.date_range("2024-01-01", periods=40, freq="B"),
+    )
+    days = [ts.date() for ts in prices.index]
+    store.stage(
+        Observation(
+            ticker="AAPL", t=days[5], aapl_news=[], macro_news=[], indicators={},
+            price=105.0, spy_trend=0.0,
+        ),
+        action=1,
+    )
+    store.flush_due(days[39], prices)  # window long since closed → episode is indexed
+    return store
+
+
+def test_memory_agent_cold_start_no_hallucination(offline_config: Config) -> None:
+    store = MemoryStore(offline_config)  # empty
+    obs = get_observation("AAPL", MATURE)
+    out = MemoryAgent(offline_config, store).run(obs, PortfolioState())
+    assert isinstance(out, MemoryContext)
+    assert out.analogs == []                      # invents nothing
+    assert "precedent" in out.lesson.lower()
+
+
+def test_memory_agent_with_episodes_returns_context(offline_config: Config) -> None:
+    store = _populated_store(offline_config)
+    obs = Observation(
+        ticker="AAPL", t=date(2024, 2, 20), aapl_news=[], macro_news=[],
+        indicators={}, price=120.0, spy_trend=0.0,
+    )
+    out = MemoryAgent(offline_config, store).run(obs, PortfolioState())
+    assert isinstance(out, MemoryContext)
+    assert out.lesson  # summarized from the retrieved closed analog

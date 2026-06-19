@@ -17,6 +17,40 @@ Template:
 
 ---
 
+## ADR-009 · S31 memory: real FAISS both modes, embedder mocked offline, delayed-write via price positions
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** `MemoryStore` uses a **real FAISS `IndexFlatIP` in both offline and online modes** —
+  `faiss-cpu==1.13.0` added to `requirements-dev.txt` (3.4 MB wheel, no torch, imports in ~0.6 s, numpy
+  2.4.4 OK). Only the **embedder** is mode-dependent (a Repository branch on `config.offline`, like the
+  loaders — not an agent): online = pinned `sentence-transformers` (`config.embedding_model`, the
+  torch-heavy part, function-local import, stays in `requirements.txt`); offline = a deterministic
+  dependency-free **hash embedder** (`_hash_embed`, 64-dim bag-of-md5-hashed-tokens, L2-normalized) so
+  `make check` stays light + reproducible. md5 is used (NOT Python's salted `hash()`) so the same text →
+  same vector across processes. Delayed write is enforced by **trading-day positions in the price
+  series**, not calendar math: `flush_due` closes a pending episode only when `idx[pos(t)+1+h]` exists
+  and its date ≤ current_t, sets `outcome_closed_t` to that bar's date, computes the reward, then adds
+  to FAISS; `retrieve` additionally filters to `outcome_closed_t ≤ obs.t`. `Episode.reward`/
+  `outcome_closed_t` are now `| None` (set on flush). Reward is the **drift-demeaned** forward return
+  (ADR-002): `sign(action)·(P[t+1+h]/P[t+1]−1 − μ)`, μ = trailing mean h-session AAPL return over
+  `reward_drift_window`, computed only from closes ≤ t; `flat`→0. A pytest `filterwarnings` ignore was
+  added for faiss's third-party SWIG `DeprecationWarning`.
+- **Reason:** The only genuinely heavy memory dep is the embedding model (torch); FAISS itself is light,
+  so using it in both modes keeps ONE index/search code path (higher fidelity, less divergence) while
+  mocking just the embedder preserves offline determinism + speed (same philosophy as `make_llm`/ADR-007).
+  Deciding closure by price-series position (not `t + (1+h)` calendar days) is exact across weekends/
+  holidays and matches how forward_return is computed, so the delayed-write test is unambiguous.
+- **Rejected alternatives:** numpy-only cosine search instead of FAISS (would drop the plan's stated
+  index and duplicate logic — FAISS installs cleanly, so unnecessary); installing sentence-transformers
+  in the dev venv (pulls torch, heavy/slow — defeats the light-venv split, ADR-001); calendar-day
+  closure (wrong across non-trading days); Python `hash()` for the offline embedder (salted →
+  non-reproducible).
+- **Consequences:** Dev venv now carries faiss-cpu; a live run still needs `make setup-full` for
+  sentence-transformers. Disk persistence (`data/faiss_index/`, already gitignored via `faiss_index/`)
+  is a capability to be wired when the backtest needs resume (S33/S4); the store is in-memory per run
+  for now. F07 + F11 → `passing`. S32 (PositionManager) + S33 (LangGraph) will call `stage`/`flush_due`/
+  `retrieve` in `run_one_day`.
+
 ## ADR-008 · S23 DebateAgent + conviction engine: sampling temperature, hold-default fixture
 - **Date:** 2026-06-19
 - **Status:** accepted

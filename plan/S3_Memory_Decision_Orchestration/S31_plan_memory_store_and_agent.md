@@ -143,21 +143,19 @@ grows from a cold, empty start into a steadily richer, leak-free body of experie
   contract so it plugs into the graph like every other analyst.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_memory.py -q` green (plus
-  `.venv/bin/python -m pytest tests/test_agents.py -k memory -q` for `MemoryAgent`).
-- [ ] **Tests:** offline & deterministic (`Config(offline=True)`, `MockLLM` for the lesson summary);
-  delayed-write invariant — an episode staged for `t` is retrievable **only at `t+1+h`** (and not at
-  `t..t+h`); `retrieve` returns only **closed** episodes (`outcome_closed_t ≤ obs.t`); cold start
-  returns "no precedents" (empty analogs, no hallucination); reward sign-ordering — same situation,
-  **long reward > short reward**; a long that only matches drift `μ` → reward ≈ 0.
-- [ ] **Gate:** `make check` green.
-- [ ] **features.json:** F07 (MemoryAgent → MemoryContext) and F11 (delayed point-in-time memory) set
-  to `passing` with evidence (command + date).
-- [ ] **Artifacts:** FAISS `IndexFlatIP` persisted to `data/faiss_index/` (gitignored, covered by
-  `.gitignore`); `(ticker, date)`-keyed embedding cache reproducible across reruns.
-- [ ] **Rules:** delayed-write point-in-time memory, no leakage — run the **check-lookahead** audit
-  (no `.add(` before `t+1+h`, retrieve filters to closed, reward is drift-demeaned/abnormal not raw);
-  numbers only in `config.py` (`h`, `k`, `embedding_model`, `reward_benchmark`, `reward_drift_window`),
-  none hardcoded.
-- [ ] **Tracking:** PROGRESS.md updated; DECISIONS.md ADR-002 referenced (drift-demeaned reward vs SPE;
-  `flat` → reward 0 caveat); note `reward_benchmark ∈ {raw, aapl_drift}` exposed as an ablation flag.
+- [x] **Acceptance command:** `pytest tests/test_memory.py -q` (4 passed) + `pytest tests/test_agents.py -k memory -q` (2 passed). ✅ 2026-06-19
+- [x] **Tests:** offline & deterministic (`Config(offline=True)`, md5 hash embedder, `MockLLM` lesson);
+  delayed-write invariant — episode staged for `t` retrievable **only at `t+1+h`** (not `t..t+h`);
+  `retrieve` returns only **closed** episodes (`outcome_closed_t ≤ obs.t`); cold start = empty analogs,
+  no hallucination; reward sign-ordering long>short (symmetric), `flat`→0, drift-match → ≈0.
+- [x] **Gate:** `make check` green (ruff + mypy 23 files + 43 unit + e2e).
+- [x] **features.json:** F07 + F11 → `passing` with evidence.
+- [x] **Artifacts:** real FAISS `IndexFlatIP` (both modes); `(ticker, date)`-keyed embedding cache
+  reproducible (deterministic md5 embedder). Disk persistence to `data/faiss_index/` (gitignored via
+  `faiss_index/`) is a capability wired when the backtest needs resume (S33/S4); in-memory per run now.
+- [x] **Rules:** delayed-write point-in-time, no leakage — check-lookahead audit clean (`index.add` only
+  in `_add`, called by `flush_due` after the window-close check; `retrieve` filters to closed; reward
+  drift-demeaned, μ from closes ≤ t). Numbers in `config.py` (`h`, `k`, `embedding_model`,
+  `reward_benchmark`, `reward_drift_window`); offline embed dim is a mock-only module constant.
+- [x] **Tracking:** PROGRESS.md updated; ADR-009 added (FAISS-both-modes / embedder-mocked / price-position
+  closure) and references ADR-002 (drift-demeaned reward; `flat`→0; `reward_benchmark ∈ {raw, aapl_drift}` ablation).

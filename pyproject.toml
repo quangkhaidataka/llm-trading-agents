@@ -24,3 +24,7 @@ testpaths = ["tests"]
 markers = [
     "e2e: end-to-end / pipeline smoke tests (run by `make e2e`)",
 ]
+filterwarnings = [
+    # faiss-cpu's SWIG bindings emit these on import under Python 3.11+; third-party, not ours.
+    "ignore:builtin type Swig.*has no __module__ attribute:DeprecationWarning",
+]

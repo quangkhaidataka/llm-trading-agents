@@ -54,8 +54,8 @@
       "milestone": "M3",
       "behavior": "MemoryAgent retrieves top-k closed FAISS episodes and returns a valid MemoryContext.",
       "verification": ".venv/bin/python -m pytest tests/test_agents.py -k memory -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S31 @ 2026-06-19: MemoryAgent wraps MemoryStore.retrieve + LCEL lesson summary → MemoryContext; cold start returns empty analogs + 'no precedent' (no hallucination); with closed episodes returns a summarized lesson. `pytest -k memory` 2 passed; make check green."
     },
     {
       "id": "F08",
@@ -86,8 +86,8 @@
       "milestone": "M3",
       "behavior": "Delayed point-in-time memory: an episode for day t is written to FAISS only at t+1+h and retrieval returns only closed episodes.",
       "verification": ".venv/bin/python -m pytest tests/test_memory.py -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S31 @ 2026-06-19: MemoryStore stage(t)/flush_due(t+1+h)/retrieve(closed-only) over a real FAISS IndexFlatIP; test_memory.py asserts an episode is retrievable ONLY at t+1+h (not t..t+h), cold start empty, and drift-demeaned reward (long>short, drift-match≈0). `pytest tests/test_memory.py` 4 passed; check-lookahead audit clean (add only in flush after window-close); make check green."
     },
     {
       "id": "F12",

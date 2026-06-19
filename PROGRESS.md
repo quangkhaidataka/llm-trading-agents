@@ -7,17 +7,16 @@ _Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M2 (Agent brains) COMPLETE** — S21 (LLM factory + MockLLM), S22 (analyst agents), and
-**S23 (DebateAgent + conviction Layers 1-2) done**. `make_llm(config)` is the sole model seam; the four
-agents (News/Macro/Technical analysts + the state-aware Bull/Bear DebateAgent) are `BaseAgent` LCEL
-chains `ChatPromptTemplate | llm.with_structured_output(Schema)` with reason-first prompts. The
-DebateAgent fuses the four signals + `PortfolioState` → `ResearchStance` (continuity bias in the prompt;
-prefers hold), and its `sample()` path feeds the conviction engine (`src/eval/calibration.py`):
-`composite_conviction` (Layer 1), `self_consistency_conviction` (Layer 2), `raw_conviction` (z) — the
-decision number is **math, not the LLM's self-report**. `tests/test_agents.py` + `tests/test_calibration.py`
-green; `make check` green (37 unit + e2e). **F04/F05/F06/F08 passing.** **Next: M3 / Step 3** — FAISS
-memory store + MemoryAgent (delayed t+1+h write), PositionManager (hysteresis + risk veto), LangGraph
-orchestration carrying `PortfolioState` across days. A live online run still needs `make setup-full`.
+Milestone **M3 (Memory · Decision · Orchestration) in progress** — M2 complete; **S31 (episodic memory)
+done**. `MemoryStore` (`src/memory/store.py`) is a real FAISS `IndexFlatIP` with strict point-in-time
+delayed write: `stage(t)` records a pending episode, `flush_due(t+1+h)` closes it (drift-demeaned reward,
+embed, add to index), `retrieve` returns only closed analogs. FAISS runs in both modes (added to dev
+venv); only the embedder is mocked offline (deterministic md5 hash embedder — sentence-transformers/torch
+is online-only). `MemoryAgent` wraps retrieve + an LCEL lesson summary → `MemoryContext` (cold start = no
+precedent, no hallucination). `tests/test_memory.py` + `-k memory` green; check-lookahead audit clean;
+`make check` green (43 unit + e2e). **F07/F11 passing.** **Next in M3: S32** (PositionManager —
+hysteresis + risk veto) then **S33** (LangGraph orchestration → one `TradeDecision`). Live run needs
+`make setup-full` (langchain-groq + sentence-transformers).
 
 ## Completed
 
@@ -52,11 +51,15 @@ orchestration carrying `PortfolioState` across days. A live online run still nee
   `sample()` for self-consistency, `debate_temperature` knob) + conviction Layers 1-2 in
   `src/eval/calibration.py`; `ResearchStance` reordered reason-first; fixture hold-first; ADR-008.
   `tests/test_calibration.py` + debate tests green. **F08 passing. M2 complete.**
+- M3 · **S31 (episodic memory)**: `src/memory/store.py` (FAISS `IndexFlatIP`, `stage`/`flush_due`/
+  `retrieve`, drift-demeaned reward, md5 hash embedder offline) + `src/agents/memory.py` (`MemoryAgent`
+  → `MemoryContext`); `faiss-cpu` added to dev venv; ADR-009. `tests/test_memory.py` + `-k memory`
+  green. **F07/F11 passing.**
 
 ## In Progress
 
-- M3 · **S31** next (Step 3) — FAISS `MemoryStore` + `MemoryAgent` with delayed `t+1+h` point-in-time
-  write/retrieval. Then PositionManager (hysteresis + risk veto) and the LangGraph orchestration.
+- M3 · **S32** next — `PositionManager` (asymmetric hysteresis on conviction z: tau_enter/exit/flip +
+  risk veto on vol/drawdown/macro risk-off/disagreement) → `TradeDecision`. Then **S33** (LangGraph).
 
 ## Blocked
 
