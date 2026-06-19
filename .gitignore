@@ -11,3 +11,4 @@ logs/
 .ipynb_checkpoints/
 faiss_index/
 *.faiss
+results/

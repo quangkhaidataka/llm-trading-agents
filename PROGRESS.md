@@ -7,18 +7,17 @@ _Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M3 (Memory · Decision · Orchestration) COMPLETE** — S31 (episodic FAISS memory), S32
-(PositionManager), and **S33 (LangGraph orchestration) done**. `build_graph` compiles the per-day state
-machine `observe → [news, macro, technical, memory] (parallel) → debate → conviction(z) →
-position_manager → commit`; `run_one_day` yields one end-to-end `TradeDecision`, carries `PortfolioState`
-across days, writes a full per-day decision trace to `log_dir` (the Step-6 report source), and drives the
-memory `stage(t)→flush_due(t)` point-in-time rhythm. Ablation flags
-(`use_memory/use_macro/use_debate/use_hysteresis/stateless`) added to config — they change what nodes
-produce, not the graph shape. `langgraph` added to the dev venv. `tests/test_graph.py` green;
-check-lookahead audit clean; `make check` green (64 unit + e2e). **F10 passing — M3 acceptance met (one
-day → TradeDecision; PortfolioState across days; point-in-time memory).** **Next: M4 / Step 4** — the
-walk-forward backtest over 2025-2026 (loop `run_one_day`, fees on position change, t+1 execution, real
-drawdown, equity curve + metrics net of fees). Live run needs `make setup-full`.
+Milestone **M4 (Walk-forward backtest) in progress** — M3 complete; **S41 (backtester + dollar
+accounting) done**. `src/backtest/run_backtest.py` owns a custom dollar P&L loop: opens C0=$1M,
+**capped-notional** sizing (`min($1M, equity)` set at entry), **t+1 execution** (a forward think pass via
+`run_one_day` + a pure `_run_accounting` pass where yesterday's target executes today), fee on position
+change (flip=double), mark-to-market equity vs buy&hold. Writes
+`results/{equity_curve.csv,trace.json,decisions_log.csv,metrics.json}` (gitignored). Offline fixtures
+extended with ~45 2025 sessions so `--mode backtest --offline` runs the default window (45 sessions,
+exits 0). `tests/test_backtest.py` (t+1, fee-on-change, flip-double, capped-notional, full run) green;
+`make check` green (70 unit + e2e). **F12 passing.** **Next in M4: S42** — the metrics module
+(Sharpe/MaxDD/turnover/avg-holding net of fees) + equity-curve chart, enriching `metrics.json`. Live run
+needs `make setup-full`.
 
 ## Completed
 
@@ -64,11 +63,15 @@ drawdown, equity curve + metrics net of fees). Live run needs `make setup-full`.
   parallel analysts → debate → conviction(z) → PositionManager → commit; per-day trace JSON;
   stage/flush memory rhythm; ablation flags added to config; `langgraph` in dev venv; ADR-011.
   `tests/test_graph.py` 5 passed. **F10 passing. M3 complete.**
+- M4 · **S41 (backtester + dollar accounting)**: `src/backtest/run_backtest.py` (`Backtester`,
+  `run_backtest`) — capped-notional, t+1 execution, fee-on-change (flip=double), equity vs buy&hold;
+  `results/` artifacts; offline 2025 fixture slice; `initial_capital`/`position_sizing`/`results_dir`
+  in config; ADR-012. `tests/test_backtest.py` 6 passed. **F12 passing.**
 
 ## In Progress
 
-- M4 · **S41** next (Step 4) — walk-forward backtest: loop `run_one_day` over 2025-2026, fees on every
-  position change, execute at t+1, real drawdown into the veto, equity curve + metrics net of fees (F12).
+- M4 · **S42** next — metrics module (Sharpe, MaxDD, turnover, avg holding period; PnL net of fees) +
+  equity-curve chart; enrich `results/metrics.json`. Closes M4.
 
 ## Blocked
 

@@ -17,6 +17,36 @@ Template:
 
 ---
 
+## ADR-012 · S41 backtester: own dollar loop (capped notional, t+1), offline 2025 fixture slice
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** The `Backtester` owns a **custom dollar P&L loop** (NOT vectorbt's full-compounding
+  default): C0 = `config.initial_capital` ($1M), **capped-notional** sizing set once at entry
+  (`notional = min(C0, equity)`), `shares = ±notional/P_exec`, mark-to-market `pnl = shares·(P[t]-P[t-1])`,
+  and a fee charged **only on a position change** (`(fee_bps/1e4)·|Δnotional|`; a flip crosses zero →
+  double fee). Execution is **t+1**: the loop is split into a forward THINK pass (`run_one_day` per
+  session, data ≤ t, staging/flushing memory) and a pure `_run_accounting(dates, prices, targets)` pass
+  where `targets[k-1]` executes at session k — making the off-by-one invariant and the fee/sizing math
+  unit-testable WITHOUT the graph (which returns hold-flat offline and never trades). Added
+  `initial_capital`, `position_sizing="capped_notional"`, `results_dir` to config; `results/` gitignored.
+  The full per-day **trace** is reused from the S33 commit node: the backtester reads
+  `log_dir/{ticker}_{t}.json` and folds it (plus cum-pnl) into `results/trace.json`. **Offline fixtures
+  were extended with ~45 business-day 2025 sessions** (appended after the locked 2024 block, starting near
+  the 2024 close to keep the calendar-gap return small) so the default 2025-2026 window has offline data
+  for `make dev` / `--mode backtest --offline`. Risk metrics (Sharpe/MaxDD/turnover/avg-holding) are a
+  minimal stub here; the real metrics module + equity chart are S42 (the run writes a basic metrics.json).
+- **Reason:** vectorbt compounds on full equity, silently breaking the capped-notional rule, so we must
+  own the loop to honor the cap, the one-session execution lag, and fee-on-change exactly — the
+  difference between a trading-realistic result and an inflated one. Splitting think/account keeps the
+  anti-lookahead ordering in one auditable place and lets the dollar math be tested deterministically.
+  Appending 2025 fixtures (vs shifting the 2024 block) keeps every existing 2024-dated test valid.
+- **Rejected alternatives:** vectorbt as the engine of record (full-compounding cap violation; kept only
+  as an optional toy cross-check); same-day (t) execution (lookahead); re-sizing notional while held
+  (the cap is an entry decision); shifting fixtures to 2025 (breaks the 2024-dated tests).
+- **Consequences:** `initial_capital`/`position_sizing`/`results_dir` in config; `results/` artifacts
+  feed the Step-6 report. F12 → `passing`. S42 enriches metrics.json + adds the equity chart; S5's
+  `full_compounding` sizing + `use_hysteresis` ablations build on this loop.
+
 ## ADR-011 · S33 LangGraph orchestration: fixed topology + flag-driven nodes, langgraph in dev venv
 - **Date:** 2026-06-19
 - **Status:** accepted

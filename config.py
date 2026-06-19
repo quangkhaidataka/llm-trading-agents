@@ -74,6 +74,9 @@ class Config:
     # ── Backtest ────────────────────────────────────────────────────────────
     fee_bps: float = 7.5                   # cost per position CHANGE
     allow_short: bool = True
+    initial_capital: float = 1_000_000.0   # C0 — the brokerage account opened on day 1
+    position_sizing: str = "capped_notional"  # "capped_notional" | "full_compounding" (S5 ablation)
+    results_dir: str = "results"           # equity_curve.csv / trace.json / metrics.json land here
 
     # ── LLM (pinned for reproducibility) ────────────────────────────────────
     provider: str = "groq"                 # "groq" | "openai"
