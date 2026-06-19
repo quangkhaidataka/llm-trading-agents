@@ -7,13 +7,15 @@ _Last updated: 2026-06-19_
 
 ## Current State
 
-Milestone **M1 (Data layer) COMPLETE** — S11 (ingestion+cache), S12 (indicators + `Observation`/
-`get_observation` gate), and **S13 (anti-lookahead sweep + enlarged fixtures) done**. The single
-point-in-time gate is built and proven: `tests/test_no_lookahead.py` sweeps all 41 fixture sessions
-asserting no field dated > t (xfail removed). `make check` green (16 unit + e2e); `--mode download
---offline` prints a snapshot. M1 acceptance met. **Next: M2** — the agent brains (Step 2: `make_llm`
-factory + MockLLM, then News/Macro/Technical agents, Debate agent, conviction layers 1–2). Needs
-`make setup-full` (heavy LLM stack) before M2 code runs.
+Milestone **M2 (Agent brains) in progress** — **S21 (LLM factory + MockLLM) done**. `make_llm(config)`
+is the sole model-instantiation seam: offline → deterministic `MockLLM`, online → `ChatGroq` (Groq
+only; the OpenAI branch was removed per the plan). Both expose the same
+`with_structured_output(Schema)` surface; `MockLLM` reads `fixtures/llm_responses.json` (keyed by
+`Schema.__name__`, lists for seeded variation) and yields validated Pydantic instances, with a seeded
+action spread that feeds S23 self-consistency. `tests/test_llm.py` green; `make check` green (25 unit +
+e2e). M1 (Data layer) is complete. **Next in M2: S22** (News/Macro/Technical analyst agents) then
+**S23** (Debate agent + conviction layers 1–2). Offline work needs only `make setup`; a live online run
+still needs `make setup-full` (langchain_groq).
 
 ## Completed
 
@@ -37,9 +39,14 @@ factory + MockLLM, then News/Macro/Technical agents, Debate agent, conviction la
   (last 12 rows kept verbatim) + spread of dated news; S11 loader-test counts recomputed; ADR-005.
   F02 → `passing`. **M1 acceptance met.**
 
+- M2 · **S21 (LLM factory + MockLLM)**: Groq-only `make_llm` (OpenAI branch removed); `MockLLM` +
+  `_StructuredRunnable` mirror `with_structured_output`; fixture re-keyed by `Schema.__name__` (lists);
+  seeded cycling index → deterministic yet varied; `tests/test_llm.py` green; ADR-006. Enables F04–F08.
+
 ## In Progress
 
-- _M1 complete; M2 (agent brains) not started._
+- M2 · **S22** next — News/Macro/Technical analyst agents (`prompt | llm.with_structured_output(Schema)`),
+  smoke-tested offline on one fixture day (F04, F05, F06).
 
 ## Blocked
 

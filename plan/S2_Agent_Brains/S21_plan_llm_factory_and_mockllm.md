@@ -136,10 +136,10 @@ and lets a real model swap in for the live backtest by flipping `config.offline`
   of backend.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_llm.py -q` green.
-- [ ] **Tests (offline & deterministic):** with `Config(offline=True)`, `make_llm` returns `MockLLM`; `MockLLM.with_structured_output(Schema).invoke(...)` returns a **validated** instance of each schema (`NewsSignal`, `MacroSignal`, `TechnicalSignal`, `ResearchStance`, `MemoryContext`) drawn from `fixtures/llm_responses.json`; same seed → identical output (deterministic); the seeded action spread yields >1 distinct action across K calls (feeds S23 self-consistency).
-- [ ] **Contract parity:** `MockLLM` exposes the exact `with_structured_output(Schema)` surface a `ChatGroq` client does — agents cannot tell offline from online (no `config.offline` branch leaks above the factory).
-- [ ] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e).
-- [ ] **features.json:** S21 owns no feature → record it **enables F04–F08** (offline MockLLM parity + factory test as evidence); do not flip any F to `passing` from this substep alone.
-- [ ] **Rules:** one `make_llm(config)` factory is the sole model-instantiation seam (no inline `ChatGroq`/`ChatOpenAI`); Groq-only online path with function-local import; `langchain_groq` not required for offline runs; fixtures committed, no API keys / no network / no MCP/live data in tests; numbers only in config (`seed`, `temperature`).
-- [ ] **Tracking:** `PROGRESS.md` updated.
+- [x] **Acceptance command:** `.venv/bin/python -m pytest tests/test_llm.py -q` green (9 passed). ✅ 2026-06-19
+- [x] **Tests (offline & deterministic):** with `Config(offline=True)`, `make_llm` returns `MockLLM`; `MockLLM.with_structured_output(Schema).invoke(...)` returns a **validated** instance of each schema (`NewsSignal`, `MacroSignal`, `TechnicalSignal`, `ResearchStance`, `MemoryContext`) from `fixtures/llm_responses.json`; same seed → identical output; seeded spread yields >1 distinct action across K calls.
+- [x] **Contract parity:** `MockLLM` exposes the exact `with_structured_output(Schema)` surface a `ChatGroq` client does; no `config.offline` branch leaks above the factory.
+- [x] **Gate:** `make check` green (ruff + mypy 22 files + 25 unit + e2e).
+- [x] **features.json:** S21 owns no feature → it **enables F04–F08** (offline MockLLM parity); no F flipped.
+- [x] **Rules:** one `make_llm(config)` seam (no inline `ChatGroq`/`ChatOpenAI`; OpenAI branch removed); Groq-only with function-local import; `langchain_groq` not needed offline; fixtures committed; no keys/network/MCP; numbers only in config (`seed`, `temperature`). ADR-006.
+- [x] **Tracking:** `PROGRESS.md` updated; `DECISIONS.md` ADR-006 added.

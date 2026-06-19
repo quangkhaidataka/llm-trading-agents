@@ -17,6 +17,32 @@ Template:
 
 ---
 
+## ADR-006 · S21 MockLLM fixture contract: keyed by Schema.__name__, lists, seeded cycling
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** `fixtures/llm_responses.json` is keyed by **`Schema.__name__`** (`NewsSignal`,
+  `MacroSignal`, `TechnicalSignal`, `MemoryContext`, `ResearchStance`) and each value is a **list** of
+  response dicts. `MockLLM.with_structured_output(schema)` returns a `_StructuredRunnable` that, on each
+  `.invoke()`, picks `pool[(seed + call_count) % len(pool)]` and returns `schema(**data)` — a validated
+  Pydantic instance. This makes offline output **deterministic** for a given seed yet **varied across
+  repeated calls** (the cycling index), which is exactly what S23's self-consistency sampling needs.
+  `ResearchStance` ships **3 entries with distinct actions** (open/hold/close) so a K-sample sweep sees
+  >1 action offline. The dict keys use the **actual** schema field names from `src/schemas.py` (e.g.
+  `rationale`) — the S21 plan's JSON example used an illustrative `reasoning` key, which does not exist.
+  The online path is **Groq-only**: the stub's `ChatOpenAI` branch was removed (the project budget is
+  all-free; no OpenAI path — a decision already taken in planning, realized here).
+- **Reason:** Lists + a seed counter give the one property the conviction engine requires — reproducible
+  variation — without any RNG or network. Keying by schema name keeps `MockLLM` schema-agnostic (it
+  never branches per agent). Using real field names means `Schema(**data)` actually validates, turning
+  the fixture into a contract check.
+- **Rejected alternatives:** the prior shape (keyed by **agent name**, a **single** dict) — gave no
+  variation for self-consistency and coupled the mock to agent identities; injecting randomness for
+  variation (breaks determinism / reproducibility, spec §12.6); keeping the OpenAI branch (no free
+  tier, out of scope).
+- **Consequences:** S22/S23 must author any new canned responses in this shape (schema-name key → list
+  of field-accurate dicts). `langchain_groq` stays a function-local import, so offline runs/tests need
+  it not installed. S21 owns no `features.json` id; it **enables F04–F08** (offline MockLLM parity).
+
 ## ADR-005 · S13 anti-lookahead sweep + enlarged fixtures (S11 test counts updated)
 - **Date:** 2026-06-19
 - **Status:** accepted
