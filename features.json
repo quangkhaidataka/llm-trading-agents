@@ -70,8 +70,8 @@
       "milestone": "M3",
       "behavior": "PositionManager applies asymmetric hysteresis (tau_enter/exit/flip) + risk veto and returns a TradeDecision.",
       "verification": ".venv/bin/python -m pytest tests/test_position_manager.py -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S32 @ 2026-06-19: deterministic rule engine (no LLM) — veto-first (vol/dd/macro risk_off/macro_risk/disagreement) then asymmetric hysteresis on calibrated conviction (tau_enter/exit/flip). Full current_position×signal transition table + veto-overrides-strong-signal covered. `pytest tests/test_position_manager.py` 16 passed; make check green (59 unit + e2e)."
     },
     {
       "id": "F10",

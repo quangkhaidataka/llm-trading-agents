@@ -60,6 +60,8 @@ class Config:
     # ── Risk veto ───────────────────────────────────────────────────────────
     vol_cap: float = 0.40                  # annualized realized-vol cap
     dd_cap: float = -0.15                  # max drawdown floor
+    macro_risk_cap: float = 0.70           # force flat above this systematic-risk level
+    disagreement_cap: float = 0.70         # force flat when analysts disagree above this
 
     # ── Conviction (spec §7.3) ──────────────────────────────────────────────
     K: int = 5                             # self-consistency samples

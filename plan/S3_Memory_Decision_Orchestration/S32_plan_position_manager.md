@@ -115,20 +115,18 @@ risk layer from the signal layer that the analysts and memory feed.
 - **No new packages** — pure Python + stdlib; all numbers live in `config.py`.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_position_manager.py -q` green.
-- [ ] **Tests:** offline & deterministic (`Config(offline=True)`; pure rule engine, no LLM, no
-  randomness); cover the **FULL current-position × signal transition table** — flat→open only at
-  `conviction ≥ tau_enter` (with/without `allow_short`), in-position→close on `thesis_still_valid=False`
-  OR `conviction ≤ tau_exit`, opposite-direction→flip only at `conviction ≥ tau_flip` (blocked when not
-  `allow_short`), else hold (thesis preserved); and **veto-overrides-strong-signal** — a `tau_flip`-
-  strength buy is forced flat (`vetoed=True`) when `realized_vol > vol_cap`, `drawdown < dd_cap`,
-  `regime == 'risk_off'` / high `macro_risk`, or high `disagreement`.
-- [ ] **Gate:** `make check` green.
-- [ ] **features.json:** F09 (PositionManager hysteresis + risk veto → TradeDecision) set to `passing`
-  with evidence (command + date).
-- [ ] **Rules:** **veto-before-hysteresis** precedence enforced structurally (guard clause short-circuits
-  before any threshold branch); **deterministic rule engine — no LLM** in `PositionManager`; all numbers
-  (`tau_enter`, `tau_exit`, `tau_flip`, `vol_cap`, `dd_cap`, `allow_short`) live only in `config.py`,
-  none hardcoded; conviction consumed is the **calibrated** P(correct), not the LLM self-report.
-- [ ] **Tracking:** PROGRESS.md updated; DECISIONS.md ADR if the veto trigger set / disagreement
-  threshold is a non-obvious choice; note `use_hysteresis` ablation flag if introduced here.
+- [x] **Acceptance command:** `pytest tests/test_position_manager.py -q` → 16 passed. ✅ 2026-06-19
+- [x] **Tests:** offline & deterministic (pure rule engine, no LLM/randomness); cover the **FULL
+  current-position × signal transition table** — flat→open only at `conviction ≥ tau_enter` (with/without
+  `allow_short`), in-position→close on `thesis_still_valid=False` OR `conviction ≤ tau_exit`,
+  opposite→flip only at `conviction ≥ tau_flip` (blocked-to-short → close to flat), else hold (thesis
+  preserved); and **veto-overrides-strong-signal** — a `tau_flip`-strength buy forced flat (`vetoed=True`)
+  on `realized_vol > vol_cap`, `drawdown < dd_cap`, `regime == risk_off`, `macro_risk > macro_risk_cap`,
+  or `disagreement > disagreement_cap` (incl. forcing a HELD position flat).
+- [x] **Gate:** `make check` green (ruff + mypy 23 files + 59 unit + e2e).
+- [x] **features.json:** F09 → `passing` with evidence.
+- [x] **Rules:** veto-before-hysteresis enforced via guard clause (`_veto_reason` short-circuits);
+  deterministic, no LLM; all numbers (`tau_enter/exit/flip`, `vol_cap`, `dd_cap`, `macro_risk_cap`,
+  `disagreement_cap`, `allow_short`) in `config.py`; conviction consumed is the **calibrated** P(correct).
+- [x] **Tracking:** PROGRESS.md updated; ADR-010 records the two new veto knobs + flip-blocked→close
+  decision; `use_hysteresis` ablation flag deferred to S5 (YAGNI).

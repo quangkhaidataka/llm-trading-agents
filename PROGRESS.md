@@ -8,15 +8,16 @@ _Last updated: 2026-06-19_
 ## Current State
 
 Milestone **M3 (Memory · Decision · Orchestration) in progress** — M2 complete; **S31 (episodic memory)
-done**. `MemoryStore` (`src/memory/store.py`) is a real FAISS `IndexFlatIP` with strict point-in-time
-delayed write: `stage(t)` records a pending episode, `flush_due(t+1+h)` closes it (drift-demeaned reward,
-embed, add to index), `retrieve` returns only closed analogs. FAISS runs in both modes (added to dev
-venv); only the embedder is mocked offline (deterministic md5 hash embedder — sentence-transformers/torch
-is online-only). `MemoryAgent` wraps retrieve + an LCEL lesson summary → `MemoryContext` (cold start = no
-precedent, no hallucination). `tests/test_memory.py` + `-k memory` green; check-lookahead audit clean;
-`make check` green (43 unit + e2e). **F07/F11 passing.** **Next in M3: S32** (PositionManager —
-hysteresis + risk veto) then **S33** (LangGraph orchestration → one `TradeDecision`). Live run needs
-`make setup-full` (langchain-groq + sentence-transformers).
+and S32 (PositionManager) done**. `MemoryStore` is a real FAISS `IndexFlatIP` with strict point-in-time
+delayed write (stage→flush_due→retrieve; drift-demeaned reward; md5 hash embedder offline). The
+`PositionManager` (`src/agents/position_manager.py`) is a pure deterministic rule engine: **veto first**
+(vol/drawdown/macro risk_off/macro_risk/disagreement) then **asymmetric hysteresis** on the calibrated
+conviction (tau_enter/exit/flip) → `TradeDecision`; the enter↔exit dead-band gives low turnover. Added
+`macro_risk_cap`/`disagreement_cap` knobs. `tests/test_position_manager.py` covers the full
+current_position×signal table + veto-overrides-strong-signal. `make check` green (59 unit + e2e).
+**F07/F09/F11 passing.** **Next in M3: S33** (LangGraph orchestration — wires the 6 agents + memory +
+PositionManager into one graph carrying `PortfolioState` across days → one end-to-end `TradeDecision`;
+closes M3). Live run needs `make setup-full` (langchain-groq + langgraph + sentence-transformers).
 
 ## Completed
 
@@ -55,11 +56,15 @@ hysteresis + risk veto) then **S33** (LangGraph orchestration → one `TradeDeci
   `retrieve`, drift-demeaned reward, md5 hash embedder offline) + `src/agents/memory.py` (`MemoryAgent`
   → `MemoryContext`); `faiss-cpu` added to dev venv; ADR-009. `tests/test_memory.py` + `-k memory`
   green. **F07/F11 passing.**
+- M3 · **S32 (PositionManager)**: `src/agents/position_manager.py` — deterministic veto-first +
+  asymmetric hysteresis → `TradeDecision`; added `macro_risk_cap`/`disagreement_cap`; ADR-010.
+  `tests/test_position_manager.py` (full transition table + veto) 16 passed. **F09 passing.**
 
 ## In Progress
 
-- M3 · **S32** next — `PositionManager` (asymmetric hysteresis on conviction z: tau_enter/exit/flip +
-  risk veto on vol/drawdown/macro risk-off/disagreement) → `TradeDecision`. Then **S33** (LangGraph).
+- M3 · **S33** next — LangGraph orchestration: wire News/Macro/Technical/Memory → Debate → conviction
+  (z) → PositionManager into one graph carrying `PortfolioState` across days; `run_one_day` calls
+  `stage`/`flush_due`; one end-to-end `TradeDecision` (F10). Closes M3.
 
 ## Blocked
 

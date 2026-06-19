@@ -17,6 +17,34 @@ Template:
 
 ---
 
+## ADR-010 · S32 PositionManager: two new veto knobs + flip-blocked-closes-to-flat
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** The `PositionManager` is a pure deterministic rule engine (no LLM): **veto first**
+  (guard clause short-circuits before any hysteresis branch), then **asymmetric hysteresis** on the
+  calibrated conviction. The plan referenced "high macro_risk" and "high disagreement" as veto triggers
+  but config had no thresholds for them, so two knobs were added: **`macro_risk_cap = 0.70`** (force
+  flat when `MacroSignal.macro_risk` exceeds it — a numeric trigger alongside the categorical
+  `regime == risk_off`) and **`disagreement_cap = 0.70`** (force flat when analyst disagreement exceeds
+  it; the disagreement metric itself is computed in S33). Two transition cells the plan table left
+  implicit are resolved: when shorting is disallowed (`allow_short=False`), (a) **flat + strong short
+  signal → stay flat** ("open short blocked"), and (b) **long + tau_flip-strength short signal → close
+  to flat** (not hold) — a strong opposite signal means the long is wrong, so exiting is the risk-correct
+  move even though we can't reverse. `new_thesis` is the stance's bull_case on a long open/flip, bear_case
+  on a short; preserved on hold; cleared on close/veto.
+- **Reason:** Keeping every number in config (coding-style) requires explicit caps for the two extra veto
+  triggers; 0.70 mirrors the conviction `tau_enter` "strong" bar and is tunable on the 2022-2024 set.
+  Closing (not holding) a long under a blocked-flip is the conservative reading of "risk control overrules
+  signals" — you should not sit in a position the evidence strongly contradicts just because you can't flip.
+- **Rejected alternatives:** hardcoding the macro/disagreement thresholds inline (violates config
+  centralization); holding the long when a flip-to-short is blocked (leaves capital in a strongly-opposed
+  position); letting the debate's `stance.action` drive the transition (the manager must be the
+  deterministic authority keyed on current_position × target × calibrated conviction, so `stance.action`
+  is advisory only). The `use_hysteresis` ablation flag is deferred to S5 (YAGNI now).
+- **Consequences:** Adds `macro_risk_cap`, `disagreement_cap` to `config.py`. F09 → `passing`. S33 will
+  compute `realized_vol`/`drawdown`/`disagreement` and pass the calibrated conviction `z` into `decide`,
+  then apply the `TradeDecision` to `PortfolioState` for t+1 execution.
+
 ## ADR-009 · S31 memory: real FAISS both modes, embedder mocked offline, delayed-write via price positions
 - **Date:** 2026-06-19
 - **Status:** accepted
