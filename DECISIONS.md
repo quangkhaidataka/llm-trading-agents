@@ -17,6 +17,26 @@ Template:
 
 ---
 
+## ADR-004 · S12 indicator conventions (annualized vol, SPY trend, NaN warm-up)
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** In `compute_indicators` / `compute_spy_trend`: (1) **`vol20` is annualized** — daily
+  return std over `vol_window` × √252 — so it matches the semantics of `config.vol_cap` (an annualized
+  cap used by the PositionManager). (2) **`spy_trend` = (last_close − MA20) / MA20** (>0 uptrend, <0
+  down; 0.0 when history is insufficient). (3) **Warm-up rows surface honest `NaN`** (not back-filled);
+  `render_indicators` shows `n/a`. (4) **MACD uses `ta` defaults (12/26/9)** — not a config knob, since
+  the plan's tunable windows are only `rsi_period`/`ma_short`/`ma_long`/`vol_window`/`mom_window`.
+- **Reason:** Annualized vol is the interpretable, standard form and keeps one consistent vol unit
+  across indicators and the risk veto. A simple price-vs-MA20 trend is enough market/beta context for
+  the MacroAgent (YAGNI). Surfacing NaN rather than back-filling preserves point-in-time honesty.
+- **Rejected alternatives:** raw (non-annualized) daily vol (would mismatch `vol_cap`); MA-slope or
+  multi-window SPY trend (more knobs, no clear benefit yet); back-filling warm-up indicators (hides
+  insufficient history, a subtle lookahead-flavored distortion).
+- **Consequences:** Added indicator-window knobs to `config.py`. `Observation` is now `frozen=True`
+  with render/memory/serialize helpers + a fail-loud `__post_init__`. `ta` added to
+  `requirements-dev.txt` (offline indicator tests). F02's gate is implemented in S12; the dedicated
+  `tests/test_no_lookahead.py` sweep + `F02 -> passing` land in S13.
+
 ## ADR-003 · S11 data layer: yfinance prices / AV news, stdlib timestamp parse, loader snapshot
 - **Date:** 2026-06-18
 - **Status:** accepted

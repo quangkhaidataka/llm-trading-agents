@@ -14,8 +14,8 @@
       "milestone": "M1",
       "behavior": "Single point-in-time data gate: for every t, get_observation(ticker, t) returns no data timestamped after t (no look-ahead).",
       "verification": "make setup-full && .venv/bin/python -m pytest tests/test_no_lookahead.py -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "active",
+      "evidence": "S12 done: compute_indicators + frozen Observation (render/to_dict + fail-loud __post_init__) + get_observation gate; tests/test_observation.py asserts the no-future invariant; verified on real cached data @ 2026-06-18; make check green. F02 -> passing in S13 when tests/test_no_lookahead.py un-xfails."
     },
     {
       "id": "F03",

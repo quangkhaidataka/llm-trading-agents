@@ -37,6 +37,13 @@ class Config:
         "financial_markets",
     )
 
+    # ── Technical indicators (windows; computed deterministically on rows <= t) ─
+    rsi_period: int = 14
+    ma_short: int = 20                     # MA20 (also SPY-trend reference)
+    ma_long: int = 50                      # MA50
+    vol_window: int = 20                   # 20d realized vol (annualized)
+    mom_window: int = 10                   # momentum lookback (sessions)
+
     # ── Memory ──────────────────────────────────────────────────────────────
     h: int = 5                             # forward-return / delayed-write window
     k: int = 5                             # top-k episodes retrieved

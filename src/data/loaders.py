@@ -21,9 +21,13 @@ from datetime import date, datetime
 from config import config
 
 
-@dataclass
+@dataclass(frozen=True)
 class Observation:
-    """Point-in-time snapshot for day t. Every field is <= t."""
+    """Immutable, point-in-time snapshot of everything the system may know on day t.
+
+    Built ONLY by get_observation(ticker, t); every field is guaranteed <= t.
+    Agents depend on this contract, not on how data was loaded.
+    """
 
     ticker: str
     t: date
@@ -34,15 +38,84 @@ class Observation:
     spy_trend: float             # SPY trend up to t
     rate_change: float | None = None   # (stretch) Fed funds / treasury change
 
+    def __post_init__(self) -> None:
+        """Fail-loud backstop: raise if any news item is dated after `t` (a future
+        regression cannot quietly leak tomorrow into today)."""
+        for item in self.aapl_news:
+            if _to_date(item["time_published"]) > self.t:
+                raise ValueError(f"future-dated AAPL news: {item['time_published']} > {self.t}")
+        for item in self.macro_news:
+            if _to_date(item["time_published"]) > self.t:
+                raise ValueError(f"future-dated macro news: {item['time_published']} > {self.t}")
+
+    def render_news(self, max_items: int | None = None) -> str:
+        """AAPL news block ('title — summary' per line, newest first, capped) for the
+        NewsAgent prompt; aapl_news is already relevance-filtered and newest-first."""
+        cap = max_items if max_items is not None else config.max_news_per_day
+        lines = [f"{it['title']} — {it['summary']}" for it in self.aapl_news[:cap]]
+        return "\n".join(lines) if lines else "(no relevant news)"
+
+    def render_macro(self) -> str:
+        """Macro headlines block for the MacroAgent. Macro news is NEVER relevance-
+        filtered — channel hygiene (idiosyncratic vs systematic)."""
+        lines = [f"{it['title']} — {it['summary']}" for it in self.macro_news]
+        return "\n".join(lines) if lines else "(no macro news)"
+
+    def render_indicators(self) -> str:
+        """Indicators as labeled text for the TechnicalAgent (interprets, never computes)."""
+        i = self.indicators
+        return (
+            f"RSI={_fmt(i.get('rsi'))} MACD={_fmt(i.get('macd'))} "
+            f"MA20={_fmt(i.get('ma20'))} MA50={_fmt(i.get('ma50'))} "
+            f"vol20={_fmt(i.get('vol20'))} mom={_fmt(i.get('mom'))}"
+        )
+
+    def to_memory_text(self) -> str:
+        """Compact text (market state + indicators + news gist) the MemoryStore embeds."""
+        return (
+            f"date={self.t.isoformat()} price={self.price:.2f} spy_trend={self.spy_trend:+.3f}\n"
+            f"indicators: {self.render_indicators()}\n"
+            f"news: {self.render_news(3)}"
+        )
+
+    def has_news(self) -> bool:
+        """True if any AAPL news exists today (agents degrade gracefully on quiet days)."""
+        return len(self.aapl_news) > 0
+
+    def to_dict(self) -> dict:
+        """JSON-serializable view for the per-day decision log / (ticker, date) cache."""
+        return {
+            "ticker": self.ticker,
+            "t": self.t.isoformat(),
+            "price": self.price,
+            "spy_trend": self.spy_trend,
+            "indicators": self.indicators,
+            "aapl_news_count": len(self.aapl_news),
+            "macro_news_count": len(self.macro_news),
+            "rate_change": self.rate_change,
+        }
+
 
 # ── THE SINGLE GATE (S12) ───────────────────────────────────────────────────
 def get_observation(ticker: str, t: date) -> Observation:
-    """Only this function returns data to the rest of the system.
-
-    Branches on config.offline: fixtures vs Parquet cache. Enforces the
-    point-in-time invariant for every field before returning.
-    """
-    raise NotImplementedError("M1/S12: assemble Observation from the loaders below")
+    """THE single point-in-time gate — the ONLY function that returns data to the rest
+    of the system. Assembles an Observation in which every field is <= t (the loaders
+    slice to <= t; compute_indicators runs only on those past rows)."""
+    prices = load_prices(ticker, until_t=t)               # sliced <= t
+    spy = load_prices(config.benchmark, until_t=t)        # SPY for market context
+    indicators = compute_indicators(prices)               # rows <= t only (ta/pandas)
+    aapl_news = load_news(ticker, t)                      # relevance-filtered, capped
+    macro_news = load_macro_news(config.macro_topics, t)  # by topic, NEVER relevance-filtered
+    return Observation(
+        ticker=ticker,
+        t=t,
+        aapl_news=aapl_news,
+        macro_news=macro_news,
+        indicators=indicators,
+        price=float(prices.iloc[-1]["close"]),            # close at t; execution at t+1
+        spy_trend=compute_spy_trend(spy),                 # sign/slope of SPY <= t
+        rate_change=None,                                 # (stretch) rate move <= t
+    )
 
 
 # ── Internal loaders (S11) — called only by get_observation / download ───────
@@ -126,11 +199,36 @@ def load_prices(ticker: str, until_t: date):
 
 
 def compute_indicators(prices_until_t) -> dict:
-    """RSI(14), MACD, MA20/50, 20d realized vol, momentum — deterministic (ta).
+    """RSI, MACD, MA20/50, annualized 20d realized vol, momentum — deterministic (ta + pandas).
 
-    No shift(-1); rolling functions must not pull future rows (spec §12.1).
+    Operates only on the (already <= t) rows passed in. No shift(-1); rolling windows never
+    pull future rows. Windows come from config. Warm-up rows yield NaN, surfaced honestly
+    (not back-filled). Returns {rsi, macd, ma20, ma50, vol20, mom} as the values at t.
     """
-    raise NotImplementedError("M1/S12")
+    from ta.momentum import RSIIndicator
+    from ta.trend import MACD, SMAIndicator
+
+    close = prices_until_t["close"]
+    returns = close.pct_change()
+    return {
+        "rsi": _last(RSIIndicator(close, window=config.rsi_period).rsi()),
+        "macd": _last(MACD(close).macd()),
+        "ma20": _last(SMAIndicator(close, window=config.ma_short).sma_indicator()),
+        "ma50": _last(SMAIndicator(close, window=config.ma_long).sma_indicator()),
+        "vol20": _last(returns.rolling(config.vol_window).std() * (252 ** 0.5)),
+        "mom": _last(close.pct_change(config.mom_window)),
+    }
+
+
+def compute_spy_trend(spy) -> float:
+    """Market/beta context: SPY's last close relative to its MA20 (>0 uptrend, <0 down),
+    using only rows <= t. Returns 0.0 when there is not yet enough history."""
+    close = spy["close"]
+    ma = close.rolling(config.ma_short).mean()
+    last_ma = _last(ma)
+    if last_ma != last_ma or last_ma == 0:  # NaN or zero
+        return 0.0
+    return float((close.iloc[-1] - last_ma) / last_ma)
 
 
 # ── Download flow (S11) — warm caches once, print a point-in-time snapshot ────
@@ -164,3 +262,15 @@ def download() -> None:
 def _to_date(time_published: str) -> date:
     """Parse AV / fixture `YYYYMMDDTHHMMSS` to a date (day granularity for the gate)."""
     return datetime.strptime(time_published[:8], "%Y%m%d").date()
+
+
+def _last(series) -> float:
+    """Value at t (last row) as a float — may be NaN on warm-up (surfaced honestly)."""
+    return float(series.iloc[-1]) if len(series) else float("nan")
+
+
+def _fmt(value: float | None) -> str:
+    """Format an indicator value for prompt text; NaN/None -> 'n/a'."""
+    if value is None or value != value:  # None or NaN
+        return "n/a"
+    return f"{value:.2f}"

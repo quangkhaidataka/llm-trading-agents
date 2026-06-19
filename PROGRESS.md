@@ -28,10 +28,14 @@ Next in M1: **S12** (`compute_indicators` + the `Observation`/`get_observation` 
 - M1 · **Live data downloaded** (2026-06-19, AV Premium, ~2 min) → `data/*.parquet` (~7 MB, gitignored):
   AAPL_news 10,904 + macro_news 10,214 + AAPL/SPY prices 1,119 each, 2022-01→2026-06-18. F03 `passing`.
 
+- M1 · **S12 (indicators + Observation gate)**: `compute_indicators` + `compute_spy_trend` + frozen
+  `Observation` (render/to_dict/`__post_init__`) + `get_observation`; `tests/test_observation.py` green;
+  verified on real cached data (2026-06-18); ADR-004. F02 `active` (→ `passing` in S13).
+
 ## In Progress
 
-- M1 · **S12** next — `compute_indicators` + `Observation` methods + `get_observation` gate (then S13
-  flips `tests/test_no_lookahead.py` from `xfail` to green → F02).
+- M1 · **S13** next — finalize `tests/test_no_lookahead.py` (implement `_as_date`, remove `xfail`,
+  parametrize over many `t`), enlarge `fixtures/` to ~40 sessions → flips F02 `passing`.
 
 ## Blocked
 

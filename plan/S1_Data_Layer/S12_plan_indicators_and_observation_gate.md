@@ -155,18 +155,18 @@ entire anti-lookahead contract, enforced in one place.
   the same `t` always yields the same numbers (reproducible, easy to test).
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_observation.py -q` green, and
+- [x] **Acceptance command:** `.venv/bin/python -m pytest tests/test_observation.py -q` green, and
       `get_observation(config.ticker, t)` returns a frozen `Observation` whose `render_*`/`to_dict` work.
-- [ ] **Tests:** `tests/test_observation.py` green under `Config(offline=True)` (fixtures, no
+- [x] **Tests:** `tests/test_observation.py` green under `Config(offline=True)` (fixtures, no
       keys/network) — indicators in sane ranges on a mature day; warm-up days surface honest `NaN`
       (not back-filled); and the gate upholds the invariant "for every `t`, `get_observation(t)` has no
       timestamp `> t`" (asserted here and re-checked in `Observation.__post_init__`).
-- [ ] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e); no new lint/type errors.
-- [ ] **features.json:** `F02` (single point-in-time gate) → `passing` with evidence (commit hash /
-      passing test); confirmed by `tests/test_no_lookahead.py` in S1.3.
-- [ ] **Rules:** indicators computed on rows `<= t` only; **no `shift(-1)`**, no centered/forward
+- [x] **Gate:** `make check` green (ruff + mypy + pytest unit + e2e); no new lint/type errors.
+- [x] **features.json:** `F02` gate implemented (S12); set `active` with evidence. F02 → `passing`
+      in S1.3 once `tests/test_no_lookahead.py` un-xfails (its recorded verification command).
+- [x] **Rules:** indicators computed on rows `<= t` only; **no `shift(-1)`**, no centered/forward
       rolling window; price is valuation-only (execution at `t+1`); macro news never relevance-filtered
       in `render_macro`; indicator windows (`rsi_period`, `ma_short`, `ma_long`, `vol_window`,
       `mom_window`) live in `config.py`, never inline; ticker-dynamic; offline parity.
-- [ ] **Tracking:** `PROGRESS.md` updated; `DECISIONS.md` ADR if a non-obvious choice (e.g. NaN
+- [x] **Tracking:** `PROGRESS.md` updated; `DECISIONS.md` ADR if a non-obvious choice (e.g. NaN
       warm-up policy, SPY-trend definition); new indicator-window config knobs recorded.
