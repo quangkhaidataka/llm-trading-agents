@@ -83,6 +83,8 @@ class Config:
     model_id: str = "llama-3.3-70b-versatile"
     temperature: float = 0.0               # decision agents; debate uses >0 for §7.3
     debate_temperature: float = 0.7        # DebateAgent self-consistency sampling (§7.3, Layer 2)
+    groq_requests_per_second: float = 0.1  # client-side throttle to respect Groq free-tier TPM
+    groq_max_retries: int = 6              # retry 429 / transient errors with backoff
 
     # ── Ablations (Step 5 — one Config toggle over the SAME graph) ───────────
     use_memory: bool = True                # False → MemoryAgent returns empty context

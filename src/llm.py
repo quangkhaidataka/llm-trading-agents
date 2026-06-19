@@ -70,6 +70,57 @@ class MockLLM:
         return _StructuredRunnable(schema, self.responses, self.seed)
 
 
+class _StructuredGroq:
+    """Wraps ChatGroq so `with_structured_output(Schema)` is robust to a real-world Groq quirk.
+
+    Groq's Llama tool-calling often emits numeric/boolean fields as STRINGS
+    (`"conviction": "0.6"`, `"target_direction": "1"`, `"thesis_still_valid": "false"`) and
+    Groq's server-side tool validation then rejects the call. We instead use JSON mode +
+    a client-side PydanticOutputParser, which coerces those strings to the schema's types.
+    The Schema contract and every agent's `prompt | llm.with_structured_output(Schema)`
+    stay identical — the fix lives only here, the single model seam (spec §12.2)."""
+
+    def __init__(self, llm: Any) -> None:
+        self._llm = llm
+
+    def with_structured_output(self, schema: type, **_kwargs: Any) -> Any:
+        from langchain_core.messages import HumanMessage
+        from langchain_core.output_parsers import PydanticOutputParser
+        from langchain_core.runnables import RunnableLambda
+
+        parser: Any = PydanticOutputParser(pydantic_object=schema)
+        instructions = parser.get_format_instructions()  # includes the JSON schema + "json"
+        bound = self._llm.bind(response_format={"type": "json_object"})
+
+        def _invoke(prompt_value: Any) -> Any:
+            messages = list(prompt_value.to_messages())
+            messages.append(HumanMessage(content=instructions))
+            return parser.parse(bound.invoke(messages).content)
+
+        return RunnableLambda(_invoke)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._llm, name)
+
+
+_GROQ_RATE_LIMITER: Any = None
+
+
+def _groq_rate_limiter(config: Config) -> Any:
+    """Process-wide shared rate limiter so ALL agents throttle against one global budget
+    (a per-agent limiter would let N agents collectively blow past Groq's TPM cap)."""
+    global _GROQ_RATE_LIMITER
+    if _GROQ_RATE_LIMITER is None:
+        from langchain_core.rate_limiters import InMemoryRateLimiter
+
+        _GROQ_RATE_LIMITER = InMemoryRateLimiter(
+            requests_per_second=config.groq_requests_per_second,
+            check_every_n_seconds=0.5,
+            max_bucket_size=1,
+        )
+    return _GROQ_RATE_LIMITER
+
+
 def make_llm(config: Config):
     """Return MockLLM (offline) or ChatGroq (online). Groq only — no OpenAI path.
 
@@ -80,11 +131,18 @@ def make_llm(config: Config):
 
     if config.provider == "groq":
         from langchain_groq import ChatGroq  # import kept function-local
+        from pydantic import SecretStr
 
-        return ChatGroq(
-            model=config.model_id,
-            temperature=config.temperature,
-            api_key=config.groq_api_key,
+        # Client-side throttle + retries so a live run survives Groq's per-minute token cap
+        # (free tier ~12k TPM) instead of crashing on the first 429.
+        return _StructuredGroq(
+            ChatGroq(
+                model=config.model_id,
+                temperature=config.temperature,
+                api_key=SecretStr(config.groq_api_key),
+                max_retries=config.groq_max_retries,
+                rate_limiter=_groq_rate_limiter(config),
+            )
         )
 
     raise ValueError(f"unknown provider: {config.provider}")

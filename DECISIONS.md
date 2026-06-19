@@ -17,6 +17,44 @@ Template:
 
 ---
 
+## ADR-014 · Live-run hardening (Groq json_mode, OpenMP, rate-limit) + free-tier finding
+- **Date:** 2026-06-19
+- **Status:** accepted
+- **Decision:** The first real online run surfaced three issues invisible offline (MockLLM); all three are
+  fixed at the LLM/memory seam without changing the agent/Schema contract:
+  (1) **Groq structured-output coercion.** Llama-3.3 tool-calling emits numeric/boolean fields as STRINGS
+  (`"conviction":"0.6"`, `"target_direction":"1"`, `"thesis_still_valid":"false"`) and Groq's server-side
+  tool validation rejects them. `make_llm` now wraps ChatGroq in `_StructuredGroq`, whose
+  `with_structured_output` uses **JSON mode + a client-side PydanticOutputParser** (which coerces those
+  strings) and appends the parser's format instructions to the prompt. `method="json_schema"` is
+  unsupported by this model; `function_calling` is flaky on complex prompts.
+  (2) **OpenMP crash.** faiss and torch (sentence-transformers, the online embedder) each bundle libomp;
+  loading both aborts on macOS ("OMP: Error #15"). `src/memory/store.py` sets
+  `KMP_DUPLICATE_LIB_OK=TRUE` before either loads.
+  (3) **Rate-limit resilience.** A live run must survive Groq's caps: `make_llm` adds `max_retries`
+  (`config.groq_max_retries=6`) and a **process-wide shared** `InMemoryRateLimiter`
+  (`config.groq_requests_per_second=0.1`) so all agents throttle against one global budget.
+  Also: fixed the bad `requirements.txt` pin `langchain-groq==0.3.10` (nonexistent) → `0.3.8`, and dropped
+  `langchain-openai` (Groq-only since S21). The heavy online deps (`langchain-groq`, `sentence-transformers`/
+  torch) live in `requirements.txt` (`make setup-full`), NOT the dev venv; **note `make setup-full`
+  installs `vectorbt` which pins numpy<2 and would break the numpy-2.4.4 dev venv — install only
+  `langchain-groq` + `sentence-transformers` for a live run (vectorbt is unused, ADR-012).**
+- **FINDING (Groq free tier blocks the full backtest):** the live pipeline works end-to-end (verified:
+  5 real sessions Jan 2025 — open long @ conviction 0.88, close on thesis-invalidation, macro risk_off
+  VETO; strategy +0.58% vs buy&hold -0.47%, net of fees). But the **free tier caps at ~12k tokens/min
+  AND 100k tokens/DAY**; at ~12.5k tokens/backtest-day the full 366-session run needs ~4.6M tokens
+  (~46 days of free quota). The full 2025-2026 run therefore requires a **paid Groq tier** (the 429 says
+  "Upgrade to Dev Tier"). The offline pipeline remains fully deterministic + free for `make check`.
+- **Reason:** these are real-world integration robustness fixes; they belong at the single model seam
+  (`make_llm`) and the memory module, leaving every agent's `prompt | llm.with_structured_output(Schema)`
+  untouched. The free-tier finding is an external constraint, documented so the live run is reproducible.
+- **Rejected alternatives:** loosening Schema field types to accept strings (pollutes the A2A contract);
+  per-agent rate limiters (collectively exceed the global TPM); `make setup-full` for the live run
+  (vectorbt breaks numpy 2.x).
+- **Consequences:** `config` gains `groq_requests_per_second`/`groq_max_retries`. `make check` stays green
+  (82 unit + e2e) — offline is unaffected. The full live backtest is gated on a paid Groq tier or a
+  multi-day throttled run; the short-window live result is captured in `logs/`.
+
 ## ADR-013 · S42 metrics: /C0 drawdown convention, fixed-base returns, matplotlib in dev venv
 - **Date:** 2026-06-19
 - **Status:** accepted

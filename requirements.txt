@@ -1,8 +1,7 @@
 # Pinned for reproducibility. Adjust versions as needed during M0.
 langchain==0.3.27
 langchain-core==0.3.79
-langchain-groq==0.3.10
-langchain-openai==0.3.40
+langchain-groq==0.3.8
 langgraph==0.6.10
 pydantic==2.12.3
 faiss-cpu==1.13.0

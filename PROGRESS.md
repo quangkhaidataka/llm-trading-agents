@@ -71,10 +71,20 @@ suite. Live run needs `make setup-full`.
   Sortino/**MaxDD (/C0)**/hit_rate/turnover/avg_holding + buy&hold trio; `plot_equity` → equity_curve.png;
   `matplotlib` in dev venv; ADR-013. `tests/test_metrics.py` 12 passed. **F12 passing. M4 complete.**
 
+- **Live-run hardening (ADR-014)**: first real online run surfaced + fixed 3 issues — Groq json_mode
+  string-coercion (`_StructuredGroq` in `src/llm.py`), faiss+torch OpenMP crash (`KMP_DUPLICATE_LIB_OK`
+  in `store.py`), and rate-limit resilience (shared `InMemoryRateLimiter` + `max_retries`,
+  `groq_requests_per_second`/`groq_max_retries` knobs). Fixed bad `langchain-groq` pin (0.3.10→0.3.8),
+  dropped `langchain-openai`. Verified live: 5 real Jan-2025 sessions (open@0.88 conviction, thesis-close,
+  macro risk_off VETO; strategy +0.58% vs buy&hold -0.47%, net of fees). **Full 2025-2026 live run is
+  blocked by the Groq FREE tier (12k TPM + 100k tokens/day → full run ≈ 4.6M tokens ≈ 46 days of quota);
+  it needs a paid Groq Dev tier.** Offline `make check` stays green (82 unit + e2e).
+
 ## In Progress
 
 - M5 · **S51** next (Step 5) — conviction calibration (Layer 3: isotonic/Platt on 2022-2024 + reliability
   diagram), baselines (buy&hold / single-agent / AV-sentiment), and the ablation suite.
+- _Deferred (needs paid Groq tier or overnight throttled run):_ the full 2025-2026 live backtest.
 
 ## Blocked
 

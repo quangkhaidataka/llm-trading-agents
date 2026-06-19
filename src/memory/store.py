@@ -20,13 +20,20 @@ offline = a deterministic hash embedder (no torch) so make check stays light + r
 
 from __future__ import annotations
 
-import hashlib
-from dataclasses import dataclass
-from datetime import date
-from typing import Any
+import os
 
-from config import Config
-from src.data.loaders import Observation
+# faiss and torch (via sentence-transformers, the online embedder) each bundle their own
+# libomp; loading both in one process aborts on macOS ("OMP: Error #15"). This is the one
+# module that touches both, so allow the duplicate OpenMP runtime here, before either loads.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
+import hashlib  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
+from datetime import date  # noqa: E402
+from typing import Any  # noqa: E402
+
+from config import Config  # noqa: E402
+from src.data.loaders import Observation  # noqa: E402
 
 _OFFLINE_EMBED_DIM = 64  # dim of the offline deterministic hash embedding (mock only)
 
