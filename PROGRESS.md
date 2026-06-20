@@ -80,6 +80,15 @@ suite. Live run needs `make setup-full`.
   blocked by the Groq FREE tier (12k TPM + 100k tokens/day → full run ≈ 4.6M tokens ≈ 46 days of quota);
   it needs a paid Groq Dev tier.** Offline `make check` stays green (82 unit + e2e).
 
+- **FIRST FULL LIVE BACKTEST (2026-06-20)** — 366 sessions (2025-01-02→2026-06-18), live Llama 3.3 70B
+  via Groq/OpenRouter (DeepInfra→Groq re-pin for speed), ~50 min, 0 crashes, resilient wrapper held.
+  **Result ($1M base, net of fees): strategy +9.1% (Sharpe 0.47, MaxDD −10.7%, 80 trades, $59.7k fees,
+  avg hold 3.2d, 128 long / 238 flat / 0 short) vs buy&hold +23.0% (Sharpe 0.57, MaxDD −30.7%).** Honest
+  read: defensive — sidestepped the H1-2025 −29% AAPL drawdown (cut MaxDD ~2/3) but underperformed
+  absolute return in a bull market; heavy churn/fees. Artifacts in `results/` (gitignored). NOTE:
+  conviction is still **raw z (uncalibrated)** — S51 (isotonic calibration) + threshold tuning are the
+  next levers to improve entries and cut turnover.
+
 ## In Progress
 
 - M5 · **S51** next (Step 5) — conviction calibration (Layer 3: isotonic/Platt on 2022-2024 + reliability
