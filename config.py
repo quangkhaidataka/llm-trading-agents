@@ -88,7 +88,7 @@ class Config:
     # OpenRouter (pay-as-you-go; SAME Llama 3.3 70B → Dec-2023 cutoff preserved, anti-lookahead intact)
     openrouter_model: str = "meta-llama/llama-3.3-70b-instruct"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_provider: str = "DeepInfra" # pin ONE backend for reproducibility (verified serves Llama 3.3 70B + json mode); "" = auto-route
+    openrouter_provider: str = "DeepInfra"  # pin ONE backend for reproducibility ("" = auto-route)
     openrouter_requests_per_second: float = 3.0  # paid → fast; lower if you hit limits
     openrouter_max_retries: int = 6
 
