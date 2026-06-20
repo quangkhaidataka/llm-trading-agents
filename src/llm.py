@@ -82,8 +82,9 @@ class _StructuredJSON:
     The Schema contract and every agent's `prompt | llm.with_structured_output(Schema)`
     stay identical — the fix lives only here, the single model seam (spec §12.2)."""
 
-    def __init__(self, llm: Any) -> None:
+    def __init__(self, llm: Any, parse_retries: int = 4) -> None:
         self._llm = llm
+        self._parse_retries = parse_retries
 
     def with_structured_output(self, schema: type, **_kwargs: Any) -> Any:
         from langchain_core.messages import HumanMessage
@@ -92,12 +93,27 @@ class _StructuredJSON:
 
         parser: Any = PydanticOutputParser(pydantic_object=schema)
         instructions = parser.get_format_instructions()  # includes the JSON schema + "json"
-        bound = self._llm.bind(response_format={"type": "json_object"})
+        fmt = {"type": "json_object"}
 
         def _invoke(prompt_value: Any) -> Any:
-            messages = list(prompt_value.to_messages())
-            messages.append(HumanMessage(content=instructions))
-            return parser.parse(bound.invoke(messages).content)
+            base = list(prompt_value.to_messages()) + [HumanMessage(content=instructions)]
+            messages = base
+            last_err: Exception | None = None
+            for attempt in range(self._parse_retries):
+                # A live provider occasionally returns empty / non-schema content; re-ask with a
+                # nudge (and a small temperature bump after the first retries to break a stuck
+                # deterministic generation) so one bad reply can't kill a long backtest.
+                llm = self._llm.bind(response_format=fmt, temperature=0.4) if attempt >= 2 \
+                    else self._llm.bind(response_format=fmt)
+                try:
+                    return parser.parse(llm.invoke(messages).content)
+                except Exception as e:  # noqa: BLE001 — retry any parse/transport failure
+                    last_err = e
+                    messages = base + [HumanMessage(
+                        content="Your previous reply was not valid JSON matching the schema. "
+                                "Reply with ONLY the JSON object, nothing else."
+                    )]
+            raise last_err  # type: ignore[misc]
 
         return RunnableLambda(_invoke)
 
@@ -151,7 +167,8 @@ def make_llm(config: Config):
                 max_retries=config.openrouter_max_retries,
                 rate_limiter=_shared_rate_limiter(config.openrouter_requests_per_second),
                 extra_body=extra_body,
-            )
+            ),
+            parse_retries=config.llm_parse_retries,
         )
 
     if config.provider == "groq":
@@ -167,7 +184,8 @@ def make_llm(config: Config):
                 api_key=SecretStr(config.groq_api_key),
                 max_retries=config.groq_max_retries,
                 rate_limiter=_shared_rate_limiter(config.groq_requests_per_second),
-            )
+            ),
+            parse_retries=config.llm_parse_retries,
         )
 
     raise ValueError(f"unknown provider: {config.provider}")

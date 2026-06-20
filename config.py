@@ -91,6 +91,7 @@ class Config:
     openrouter_provider: str = "DeepInfra"  # pin ONE backend for reproducibility ("" = auto-route)
     openrouter_requests_per_second: float = 3.0  # paid → fast; lower if you hit limits
     openrouter_max_retries: int = 6
+    llm_parse_retries: int = 4             # re-ask (with a nudge) when a reply isn't valid schema JSON
 
     # ── Ablations (Step 5 — one Config toggle over the SAME graph) ───────────
     use_memory: bool = True                # False → MemoryAgent returns empty context
