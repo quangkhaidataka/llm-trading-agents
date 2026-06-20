@@ -119,7 +119,7 @@ class TechnicalAgent(BaseAgent):
 
 ## How It Connects
 Each analyst is a thin specialization of the same `BaseAgent` skeleton: at construction it
-asks `make_llm(config)` for a brain (real Groq or the offline MockLLM, identical interface),
+asks `make_llm(config)` for a brain (the live backbone — OpenRouter or Groq — or the offline MockLLM, identical interface),
 then `_build_chain` assembles the LCEL pipe `ChatPromptTemplate | llm.with_structured_output(Schema)`,
 binding the agent to its output contract. At decision time, `run` takes the day's immutable
 `Observation`, calls the right render helper to turn raw news / macro headlines / indicators

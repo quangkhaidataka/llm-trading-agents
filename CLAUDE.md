@@ -58,7 +58,7 @@ system enters a position and holds it across sessions until the entry *thesis* i
 
 ## Stack & layout
 
-Stack: LangChain/LangGraph · ChatGroq Llama 3.3 70B (free) · Pydantic (A2A schemas) · FAISS +
+Stack: LangChain/LangGraph · OpenRouter (or Groq) Llama 3.3 70B · Pydantic (A2A schemas) · FAISS +
 sentence-transformers (memory) · `ta`/pandas (indicators) · vectorbt (backtest). Layout (spec §13.4):
 `config.py` (all knobs) · `src/{main,llm}.py` · `src/data/loaders.py` (the `get_observation` gate) ·
 `src/agents/{news,macro,technical,memory,debate,position_manager}.py` · `src/graph/build_graph.py` ·

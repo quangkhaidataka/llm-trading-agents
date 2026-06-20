@@ -2,8 +2,8 @@
 
 ## Objective
 A single good equity curve invites the obvious question: *did you just get lucky with
-one parameter?* This step answers it without spending a cent on a second LLM provider
-(LLM-backbone robustness is descoped — Groq only, all-free). The most consequential
+one parameter?* This step answers it with a **non-LLM** sweep (an LLM-backbone swap, RQ4/F16,
+is now a cheap optional add-on via OpenRouter — see ADR-015). The most consequential
 knob we have not yet stress-tested is `config.h`, the **forward-return / delayed-write
 window** — it sets how far ahead "did the trade work?" is judged, which shapes both the
 memory reward and how long an episode waits before it becomes retrievable. So we sweep
@@ -31,7 +31,7 @@ the Step-5 **ablation table**, which varies the components rather than the windo
     / notebook / write-up.
   - **`tests/test_robustness.py`** — offline test asserting the sweep runs and emits a
     well-formed table (one row per `h`, expected columns, finite metrics).
-  - Replaces the old model-sensitivity feature **F16** (LLM-swap descoped).
+  - Primary evidence for **F16** (the LLM-backbone swap is now a cheap optional add-on via OpenRouter).
   - *Pointer:* `results/ablation_table.csv` / `.md` (Step 5) is the companion
     robustness artifact (component sensitivity).
 
@@ -99,7 +99,7 @@ over the price cache. The resulting `robustness_h.csv`/`.md` is then read (never
 recomputed) by the S6.3 notebook and quoted in the README's results summary, where it
 sits beside the Step-5 ablation table to make the same point from two angles: the
 edge is not an artifact of one window or one component. Together they are the project's
-non-LLM robustness story, standing in for the descoped model-swap experiment.
+non-LLM robustness story; an LLM-backbone swap is an optional cheap add-on via OpenRouter.
 
 ## Key Technology, Design Patterns & Packages
 - **`dataclasses.replace(base_config, h=h)`** — config-only variation (the project's
@@ -111,15 +111,15 @@ non-LLM robustness story, standing in for the descoped model-swap experiment.
   artifacts; the notebook reads them back with no recompute.
 - **Offline-first testing (`config.offline=True`, MockLLM + fixtures)** — the sweep is
   deterministic and key-free in CI, so `test_robustness.py` runs in `make check`.
-- **No new provider, no OpenAI, no server** — robustness is shown via the `h` sweep +
-  the Step-5 ablations, honoring the all-free Groq-only budget.
+- **No server, no recompute** — robustness is shown via the `h` sweep + the Step-5
+  ablations, reusing the LLM cache (no new LLM cost); a backbone swap is an optional extra.
 
 ## Definition of Done
 
 - [ ] **Acceptance command:** `.venv/bin/python -m pytest tests/test_robustness.py -q` (offline) green; the sweep writes `results/robustness_h.csv` + `results/robustness_h.md`.
 - [ ] **Tests:** `tests/test_robustness.py` runs **offline & deterministically** (`Config(offline=True)`, MockLLM + fixtures) — `run_h_sweep` produces one row per `h ∈ {1,5,10,21}` with the expected metric columns and finite, net-of-fees values, and `write_robustness_artifacts` emits the CSV + Markdown table.
 - [ ] **Gate:** `make check` green (lint + typecheck + test + e2e).
-- [ ] **features.json:** the `h`-sweep robustness work **replaces the descoped F16** (LLM model-swap is out of scope, Groq-only); flip F16 to `passing` with evidence reframed as the forward-window sweep (or mark descoped per the Step-5 ablation companion).
+- [ ] **features.json:** the `h`-sweep is the **primary** robustness artifact for F16; an actual LLM-backbone swap (OpenRouter `config.provider`/`openrouter_model`) is now a cheap optional add-on. Flip F16 to `passing` with the forward-window sweep as evidence (optionally augmented by a one-off backbone-swap run).
 - [ ] **Artifacts:** `results/robustness_h.csv` (one row per `h`; total return, Sharpe, Sortino, MaxDD, hit rate, turnover, avg holding period — all net of fees over 2025–2026) and `results/robustness_h.md` (the same table as Markdown for the README / notebook).
-- [ ] **Rules:** each variant is `dataclasses.replace(base_config, h=h)` over the **one** backtest engine (no code fork); the shared `(ticker,date,agent)` LLM cache is reused since `h` is not in the key (no new LLM cost, no new provider); artifacts are written once and **read, not recomputed**, downstream.
+- [ ] **Rules:** each variant is `dataclasses.replace(base_config, h=h)` over the **one** backtest engine (no code fork); the shared `(ticker,date,agent)` LLM cache is reused since `h` is not in the key (no new LLM cost); artifacts are written once and **read, not recomputed**, downstream.
 - [ ] **Tracking:** `PROGRESS.md` updated; run the `update-progress` + `feature-status` skills to record state + evidence; note the F16-replacement decision in `DECISIONS.md`.

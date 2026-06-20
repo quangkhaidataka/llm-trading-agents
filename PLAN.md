@@ -11,8 +11,9 @@
 `get_observation` contract (`src/data/loaders.py`), all agent/graph/backtest/eval stubs, the harness
 (`.claude/`, `docs/`, `Makefile`, `features.json`), and offline fixtures exist. Every `src/` function
 raises `NotImplementedError("Mx: ...")`. `make setup` + `make check` pass; git is initialized with a
-clean checkpoint. The Alpha Vantage and Groq keys are in `.env`, so live data download and live LLM
-calls are unblocked.
+clean checkpoint. The Alpha Vantage and **OpenRouter** keys are in `.env`, so live data download and
+live LLM calls are unblocked. (Live backbone = OpenRouter by default, pay-as-you-go, same Llama 3.3 70B;
+Groq is kept as a one-config-line alternative. See ADR-015 — Groq's free tier can't complete the run.)
 
 ## Guiding principles (apply to every step)
 
@@ -253,7 +254,8 @@ def get_observation(ticker: str, t: date) -> Observation:
 
 #### Objective
 Now the system starts to think. We first give it a brain and a fake brain: the `make_llm` factory that
-returns a real `ChatGroq` client online and a deterministic `MockLLM` offline, both speaking the same
+returns the configured live backbone online — `ChatOpenAI` pointed at **OpenRouter** by default (or
+`ChatGroq`) — and a deterministic `MockLLM` offline, both speaking the same
 `with_structured_output(Schema)` language. Then we build the reasoning agents — the three analysts
 (News reads idiosyncratic headlines, Macro judges the regime, Technical interprets the indicators) and
 the state-aware DebateAgent that runs a Bull-vs-Bear argument relative to the current position. Finally
@@ -266,8 +268,9 @@ of the A2A protocol that is this project's contribution. The News/Macro split op
 idiosyncratic-vs-systematic design; the "interpret, don't compute" rule keeps the Technical agent from
 hallucinating numbers; the DebateAgent's "is the thesis still valid?" framing and hold-bias are what
 make the system a position manager, not a daily classifier. The conviction engine is what lets later
-thresholds mean probabilities rather than vibes. The clean factory seam also lets us swap the Groq
-model in one line, and keeps the whole pipeline runnable offline for free, deterministic testing.
+thresholds mean probabilities rather than vibes. The clean factory seam also lets us swap the LLM
+backbone (OpenRouter ↔ Groq, or another OpenRouter-hosted model) in one config line, and keeps the
+whole pipeline runnable offline for free, deterministic testing.
 
 #### Inputs
 - Step 1 (`get_observation`), `src/llm.py` (`make_llm`, `MockLLM` stubs), `src/schemas.py`
@@ -278,7 +281,7 @@ model in one line, and keeps the whole pipeline runnable offline for free, deter
 - Prompt designs from spec §5.1–§5.3, §5.5, §7.3.
 
 #### Outputs
-- Working `make_llm(config)` (ChatGroq online / MockLLM offline) and a `MockLLM` whose
+- Working `make_llm(config)` (OpenRouter/ChatGroq online / MockLLM offline) and a `MockLLM` whose
   `.with_structured_output(Schema)` yields a validated `Schema` from fixtures (controllable spread for
   self-consistency). `tests/test_llm.py`.
 - `src/agents/{news,macro,technical}.py` and `src/agents/debate.py` as LCEL chains returning their
@@ -297,8 +300,8 @@ model in one line, and keeps the whole pipeline runnable offline for free, deter
   form an AAPL-specific view; TechnicalAgent must not invent numbers; handle empty-news days (→ flat).
 - **Macro channel hygiene.** Confirm macro headlines come from the topic feed, never relevance-filtered.
 - **Conviction edge cases.** Guard divide-by-zero in `agreement` when all confidences are 0.
-- **Cost of K-sampling.** K× DebateAgent calls/day; Groq free tier covers it; cache by
-  `(ticker, date, agent, sample_idx)` so reruns/ablations are free.
+- **Cost of K-sampling.** K× DebateAgent calls/day; the live run is pay-as-you-go via **OpenRouter**
+  (~$0.60 for the full backtest); cache by `(ticker, date, agent, sample_idx)` so reruns/ablations are free.
 
 #### Technical Implementation Details
 - **Design patterns: Factory** (`make_llm`, online/offline Strategy) + **Template Method** (`BaseAgent`
@@ -310,8 +313,9 @@ model in one line, and keeps the whole pipeline runnable offline for free, deter
   helpers turn news/indicators/state into compact labeled text. `temperature=0` for decision agents;
   DebateAgent sampled at `temperature>0` only for Layer 2.
 - Conviction = pure functions implementing spec §7.3 formulas; randomness lives only in the LLM layer.
-- Keep `langchain_groq` imports function-local. (Provider stays Groq-only; no OpenAI — the project's
-  budget is all-free, so any backbone swap uses a second Groq model.)
+- Keep heavy LLM imports (`langchain_openai` / `langchain_groq`) function-local. The live backbone is
+  selected by `config.provider` — **OpenRouter** (OpenAI-compatible, pay-as-you-go) by default, or Groq;
+  both serve the same Llama 3.3 70B (Dec-2023 cutoff). A backbone swap is one config line (ADR-015).
 
 **The conviction methodology (why and how).** The system needs one number — *conviction* — to drive
 the hysteresis thresholds (open if `≥ tau_enter`, exit if `< tau_exit`, …). The naive way is to ask the
@@ -823,11 +827,11 @@ toggle over the same engine, the comparison is clean and credible.
 
 ### Step 6: Reporting & Final DoD (+ non-LLM robustness checks)
 
-> **Scope note:** LLM-backbone robustness (the old "swap to GPT-4o-mini" / research-question-#4
-> experiment) is **descoped** — the project's budget is all-free (Groq only) and we are not testing
-> model-swap robustness now. Robustness is instead demonstrated through **non-LLM** checks (the ablation
-> suite from Step 5 plus a forward-window `h` sensitivity sweep), and the step focuses on packaging the
-> results.
+> **Scope note:** LLM-backbone robustness (research-question-#4) is now **optional, not descoped** —
+> with OpenRouter the backbone is a cheap one-config-line swap (`config.provider` / `openrouter_model`),
+> so a model-swap check (F16) *can* be run for a few cents if desired. The **primary** robustness
+> demonstration remains **non-LLM** (the Step-5 ablation suite + a forward-window `h` sensitivity sweep),
+> and the step focuses on packaging the results; a backbone swap is an inexpensive add-on, not a blocker.
 
 #### Objective
 Finally we tell the story. We assemble `notebooks/results.ipynb` to render the equity curve,
@@ -841,8 +845,9 @@ reviewer reads — and the web report is the concrete payoff of the project's ex
 #### Why This Step Matters
 This turns months of plumbing into the portfolio piece and satisfies the project Definition of Done
 (spec §13.1). The non-LLM robustness checks show the *results* are not a fluke of one parameter setting
-(answering research questions #1–#3 about debate, memory, and the state-aware policy) without paying for
-a second LLM provider. Honest framing of limitations (spec §11) is part of the credibility.
+(answering research questions #1–#3 about debate, memory, and the state-aware policy); a backbone swap
+(RQ4 / F16) is now a cheap optional add-on via OpenRouter. Honest framing of limitations (spec §11) is
+part of the credibility.
 
 #### Inputs
 - Steps 2–5, all `results/` artifacts (incl. `results/trace.json` + `results/equity_curve.csv` for the
@@ -859,7 +864,8 @@ a second LLM provider. Honest framing of limitations (spec §11) is part of the 
   rationale (News/Macro/Technical/Memory), the Debate's bull/bear/thesis, the conviction, and the final
   decision + reason. Open by double-click; no server needed. → new feature **F18** (explainable report).
 - Populated `notebooks/results.ipynb` rendering all figures/tables from saved artifacts (no recompute).
-- Final `README.md` (results summary, anti-lookahead commitment, pinned **Groq** model, limitations);
+- Final `README.md` (results summary, anti-lookahead commitment, pinned model — **OpenRouter Llama 3.3
+  70B**, Dec-2023 cutoff, limitations);
   `features.json` relevant features `passing` with evidence; `PROGRESS.md` updated.
 - **Acceptance (project DoD §13.1):** one-command end-to-end run; backtest with fees over 2025–2026;
   PnL/equity curve + metrics vs buy & hold; `test_no_lookahead` green.
@@ -875,7 +881,7 @@ a second LLM provider. Honest framing of limitations (spec §11) is part of the 
 
 #### Technical Implementation Details
 - The robustness driver loops over `config` variants (different `h`; the Step-5 ablation flags) and
-  reuses the entire pipeline + LLM cache — no new provider, no OpenAI.
+  reuses the entire pipeline + LLM cache — no new LLM cost.
 - Notebook cells load `metrics.json`, `equity_curve.csv`, `ablation_table.csv`,
   `reliability_diagram.png`, `robustness_h.csv` and plot with `matplotlib`.
 - **Web report (`src/eval/report.py::build_report_html`)** — read `equity_curve.csv` + `trace.json`,
@@ -896,5 +902,5 @@ a second LLM provider. Honest framing of limitations (spec §11) is part of the 
   `verifier_agent` loop per step, and the `check-lookahead` skill on every data/memory/backtest change.
 - After each step: update `features.json` (state + evidence), `PROGRESS.md`, and `DECISIONS.md` for any
   non-obvious choice. Commit a small, atomic checkpoint (the pre-commit hook runs `make check`).
-- First live run (Steps 4–5) consumes the Alpha Vantage + Groq keys in `.env`; every subsequent rerun
-  is cache-backed and free.
+- First live run (Steps 4–5) consumes the Alpha Vantage + **OpenRouter** keys in `.env` (pay-as-you-go,
+  ~$0.60 for the full backtest); every subsequent rerun is cache-backed and free.

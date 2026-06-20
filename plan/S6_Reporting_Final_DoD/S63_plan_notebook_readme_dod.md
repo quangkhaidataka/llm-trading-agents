@@ -10,7 +10,7 @@ the interactive `report.html`. No cell re-runs the backtest; the notebook is a f
 deterministic *viewer*, so it always agrees with the saved numbers. Then we finalize
 the `README.md` so it tells the whole story in one screen: the headline results, the
 anti-lookahead commitment (the one promise a quant reviewer checks first), the
-**pinned Groq model** (reproducibility), and the honest limitations (spec §11) — single
+**pinned model** (OpenRouter Llama 3.3 70B, Dec-2023 cutoff — reproducibility), and the honest limitations (spec §11) — single
 asset, title+summary news only, ~18-month one-regime test, one debate round. Finally we
 add the project's **Definition of Done** gate: one acceptance test (and a `make` target)
 that asserts every `results/*` artifact exists and the DoD invariants hold — the
@@ -24,13 +24,13 @@ the project is *done* in a way anyone can verify with one command.
     `reliability_diagram.png`, `robustness_h.csv` (+ `.md`), and `report.html`.
   - Skeletons/files to finalize: `notebooks/results.ipynb`, `README.md`,
     `features.json`, `PROGRESS.md`.
-  - `config` (pinned `model_id`, `provider="groq"`, fee/date knobs) for the README's
-    reproducibility + anti-lookahead sections.
+  - `config` (pinned `provider="openrouter"` + `openrouter_model`, fee/date knobs) for the
+    README's reproducibility + anti-lookahead sections.
 - **Outputs:**
   - **`notebooks/results.ipynb`** — populated; cells load each artifact and render it
     (matplotlib + pandas tables + an HTML link to `report.html`). Read-only viewer.
-  - **`README.md`** — final: results summary, anti-lookahead commitment, pinned Groq
-    model, limitations (spec §11). Located at repo root.
+  - **`README.md`** — final: results summary, anti-lookahead commitment, pinned model
+    (OpenRouter Llama 3.3 70B), limitations (spec §11). Located at repo root.
   - **`tests/test_dod.py`** — acceptance test asserting all `results/*` artifacts
     exist + DoD invariants (backtest net of fees, `test_no_lookahead` green).
   - **`make report`** (or `make dod`) target running the acceptance check end-to-end.
@@ -101,8 +101,8 @@ reliability diagram from Step 5, the `h`-sweep from S6.2 — and simply *shows* 
 with a link out to the clickable `report.html` from S6.1, so the notebook, the static
 figures, and the interactive page all draw on the exact same numbers and can never
 disagree. The README then distills the same artifacts into the one-screen pitch a
-reviewer reads first, anchored by the anti-lookahead commitment and the pinned Groq
-model. The DoD acceptance test is the seal on the package: it confirms the artifacts
+reviewer reads first, anchored by the anti-lookahead commitment and the pinned model
+(OpenRouter Llama 3.3 70B). The DoD acceptance test is the seal on the package: it confirms the artifacts
 are all present and the two non-negotiable invariants — fees charged, no look-ahead —
 still hold, so "done" is something you *run*, not something we merely claim.
 
@@ -119,7 +119,7 @@ still hold, so "done" is something you *run*, not something we merely claim.
   in agreement via the `update-progress` + `feature-status` skills (the `doc_agent`),
   per the execution discipline; honest limitations (spec §11) over over-claiming.
 - **No recompute, no new packages, no server** — the chapter only *packages* results,
-  honoring YAGNI and the all-free Groq-only budget.
+  honoring YAGNI; the live backbone is pay-as-you-go OpenRouter.
 
 ## Definition of Done
 
@@ -128,5 +128,5 @@ still hold, so "done" is something you *run*, not something we merely claim.
 - [ ] **Gate:** `make check` green, with `test_dod.py` wired into it (lint + typecheck + test + e2e); `make dod`/`make report` runs the acceptance check end-to-end.
 - [ ] **features.json:** all relevant features flipped to `passing` with evidence (F12–F15 backtest/eval, **F18** report, **F02** anti-lookahead) **and F17 ticker-dynamic** moved from `active` to `passing` after full-pipeline verification (`config.ticker` swap re-runs with no other line changed).
 - [ ] **Artifacts:** populated `notebooks/results.ipynb` (read-only viewer cells rendering the saved equity PNG, metrics, ablation, reliability diagram, `h`-sweep + an HTML link to `report.html`) and a finalized root `README.md`.
-- [ ] **Rules:** the notebook **renders saved artifacts with no recompute** (no pipeline calls, no new dependency); `README.md` states the **anti-lookahead commitment** (priority #1), the **pinned Groq model** (`provider="groq"` + `model_id`, for reproducibility), and the honest **limitations** (spec §11: single asset, title+summary news only, ~18-month one-regime test, one debate round); honest framing over over-claiming.
+- [ ] **Rules:** the notebook **renders saved artifacts with no recompute** (no pipeline calls, no new dependency); `README.md` states the **anti-lookahead commitment** (priority #1), the **pinned model** (`provider="openrouter"` + `openrouter_model`, Llama 3.3 70B Dec-2023 cutoff, for reproducibility), and the honest **limitations** (spec §11: single asset, title+summary news only, ~18-month one-regime test, one debate round); honest framing over over-claiming.
 - [ ] **Tracking:** `PROGRESS.md` updated; README / `features.json` / `PROGRESS.md` kept in agreement via the `update-progress` + `feature-status` skills (`doc_agent`); record the DoD close-out in `DECISIONS.md`.
