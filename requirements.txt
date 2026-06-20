@@ -2,6 +2,7 @@
 langchain==0.3.27
 langchain-core==0.3.79
 langchain-groq==0.3.8
+langchain-openai==0.3.35
 langgraph==0.6.10
 pydantic==2.12.3
 faiss-cpu==1.13.0

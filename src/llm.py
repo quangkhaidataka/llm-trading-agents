@@ -1,9 +1,10 @@
-"""LLM factory — the ONE place a model is instantiated (spec §12.2, §13.6).
+"""LLM factory — the ONE place a model is instantiated (spec §12.2, §13.6, RQ4).
 
 Going offline (MockLLM) or swapping the live backbone happens here in one line; the
 rest of the system never knows which it got. Callers only ever do
-`make_llm(config).with_structured_output(Schema)`. Groq is the sole online backbone —
-the project's budget is all-free, so there is no OpenAI path.
+`make_llm(config).with_structured_output(Schema)`. Online backbones are selected by
+`config.provider`: "openrouter" (pay-as-you-go, OpenAI-compatible) or "groq". Both serve
+the SAME Llama 3.3 70B (Dec-2023 cutoff → the anti-lookahead claim holds either way).
 """
 
 from __future__ import annotations
@@ -70,13 +71,14 @@ class MockLLM:
         return _StructuredRunnable(schema, self.responses, self.seed)
 
 
-class _StructuredGroq:
-    """Wraps ChatGroq so `with_structured_output(Schema)` is robust to a real-world Groq quirk.
+class _StructuredJSON:
+    """Provider-agnostic robust `with_structured_output(Schema)` for any OpenAI-compatible
+    chat model (ChatGroq / ChatOpenAI→OpenRouter).
 
-    Groq's Llama tool-calling often emits numeric/boolean fields as STRINGS
+    LLMs (esp. Groq's Llama tool-calling) often emit numeric/boolean fields as STRINGS
     (`"conviction": "0.6"`, `"target_direction": "1"`, `"thesis_still_valid": "false"`) and
-    Groq's server-side tool validation then rejects the call. We instead use JSON mode +
-    a client-side PydanticOutputParser, which coerces those strings to the schema's types.
+    strict server-side validation then rejects the call. We instead use JSON mode + a
+    client-side PydanticOutputParser, which COERCES those strings to the schema's types.
     The Schema contract and every agent's `prompt | llm.with_structured_output(Schema)`
     stay identical — the fix lives only here, the single model seam (spec §12.2)."""
 
@@ -103,31 +105,54 @@ class _StructuredGroq:
         return getattr(self._llm, name)
 
 
-_GROQ_RATE_LIMITER: Any = None
+_RATE_LIMITER: Any = None
 
 
-def _groq_rate_limiter(config: Config) -> Any:
+def _shared_rate_limiter(requests_per_second: float) -> Any:
     """Process-wide shared rate limiter so ALL agents throttle against one global budget
-    (a per-agent limiter would let N agents collectively blow past Groq's TPM cap)."""
-    global _GROQ_RATE_LIMITER
-    if _GROQ_RATE_LIMITER is None:
+    (a per-agent limiter would let N agents collectively blow past the provider's TPM cap)."""
+    global _RATE_LIMITER
+    if _RATE_LIMITER is None:
         from langchain_core.rate_limiters import InMemoryRateLimiter
 
-        _GROQ_RATE_LIMITER = InMemoryRateLimiter(
-            requests_per_second=config.groq_requests_per_second,
+        _RATE_LIMITER = InMemoryRateLimiter(
+            requests_per_second=requests_per_second,
             check_every_n_seconds=0.5,
             max_bucket_size=1,
         )
-    return _GROQ_RATE_LIMITER
+    return _RATE_LIMITER
 
 
 def make_llm(config: Config):
-    """Return MockLLM (offline) or ChatGroq (online). Groq only — no OpenAI path.
+    """Return MockLLM (offline) or the online backbone chosen by config.provider.
 
     The single instantiation seam: callers only ever do
     `make_llm(config).with_structured_output(Schema)`."""
     if config.offline:
         return MockLLM(seed=config.seed)
+
+    if config.provider == "openrouter":
+        from langchain_openai import ChatOpenAI  # import kept function-local
+        from pydantic import SecretStr
+
+        # Optionally pin ONE backend (reproducibility); "" = let OpenRouter route.
+        extra_body: dict = {}
+        if config.openrouter_provider:
+            extra_body["provider"] = {
+                "order": [config.openrouter_provider],
+                "allow_fallbacks": False,
+            }
+        return _StructuredJSON(
+            ChatOpenAI(
+                model=config.openrouter_model,
+                temperature=config.temperature,
+                api_key=SecretStr(config.openrouter_api_key),
+                base_url=config.openrouter_base_url,
+                max_retries=config.openrouter_max_retries,
+                rate_limiter=_shared_rate_limiter(config.openrouter_requests_per_second),
+                extra_body=extra_body,
+            )
+        )
 
     if config.provider == "groq":
         from langchain_groq import ChatGroq  # import kept function-local
@@ -135,13 +160,13 @@ def make_llm(config: Config):
 
         # Client-side throttle + retries so a live run survives Groq's per-minute token cap
         # (free tier ~12k TPM) instead of crashing on the first 429.
-        return _StructuredGroq(
+        return _StructuredJSON(
             ChatGroq(
                 model=config.model_id,
                 temperature=config.temperature,
                 api_key=SecretStr(config.groq_api_key),
                 max_retries=config.groq_max_retries,
-                rate_limiter=_groq_rate_limiter(config),
+                rate_limiter=_shared_rate_limiter(config.groq_requests_per_second),
             )
         )
 

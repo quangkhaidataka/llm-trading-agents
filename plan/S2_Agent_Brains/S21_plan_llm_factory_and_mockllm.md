@@ -1,5 +1,11 @@
 # S2.1 — LLM Factory & MockLLM
 
+> **Update (2026-06-20, ADR-015):** the "Groq-only online" decision below was widened — `make_llm` now
+> also supports `provider="openrouter"` (ChatOpenAI → OpenRouter, the SAME Llama 3.3 70B, Dec-2023 cutoff)
+> because Groq's Dev tier is unavailable and its free tier can't complete the backtest (ADR-014). Both
+> backbones live behind one `config.provider` switch (spec §12.2 / RQ4 / F16); the structured-output
+> wrapper is generalized to `_StructuredJSON`. The MockLLM/offline design below is unchanged.
+
 ## Objective
 Before any agent can think, it needs something to think *with* — and we need that
 something to be swappable, free to test, and honest about the fact that offline and

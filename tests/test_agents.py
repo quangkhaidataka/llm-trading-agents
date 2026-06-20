@@ -94,6 +94,15 @@ def _four_signals(cfg: Config):
     return obs, news, macro, technical, memory
 
 
+def test_research_stance_coerces_string_target_direction() -> None:
+    # live LLMs (via OpenRouter) often return the Literal-int as a string ("1")
+    s = ResearchStance(
+        bull_case="b", bear_case="r", thesis_still_valid=True,
+        action="open", target_direction="1", conviction="0.6",  # type: ignore[arg-type]
+    )
+    assert s.target_direction == 1 and s.conviction == 0.6
+
+
 def test_debate_agent_returns_researchstance(offline_config: Config) -> None:
     obs, news, macro, technical, memory = _four_signals(offline_config)
     out = DebateAgent(offline_config).run(

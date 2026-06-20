@@ -79,12 +79,18 @@ class Config:
     results_dir: str = "results"           # equity_curve.csv / trace.json / metrics.json land here
 
     # ── LLM (pinned for reproducibility) ────────────────────────────────────
-    provider: str = "groq"                 # "groq" | "openai"
-    model_id: str = "llama-3.3-70b-versatile"
+    provider: str = "openrouter"           # "openrouter" | "groq" — single-line backbone swap (§12.2)
+    model_id: str = "llama-3.3-70b-versatile"            # Groq model id (Llama 3.3 70B, Dec-2023 cutoff)
     temperature: float = 0.0               # decision agents; debate uses >0 for §7.3
     debate_temperature: float = 0.7        # DebateAgent self-consistency sampling (§7.3, Layer 2)
     groq_requests_per_second: float = 0.1  # client-side throttle to respect Groq free-tier TPM
     groq_max_retries: int = 6              # retry 429 / transient errors with backoff
+    # OpenRouter (pay-as-you-go; SAME Llama 3.3 70B → Dec-2023 cutoff preserved, anti-lookahead intact)
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_provider: str = ""          # pin ONE backend for reproducibility (e.g. "DeepInfra"); "" = auto-route
+    openrouter_requests_per_second: float = 3.0  # paid → fast; lower if you hit limits
+    openrouter_max_retries: int = 6
 
     # ── Ablations (Step 5 — one Config toggle over the SAME graph) ───────────
     use_memory: bool = True                # False → MemoryAgent returns empty context
@@ -103,6 +109,7 @@ class Config:
     # ── Secrets (from .env, never committed) ────────────────────────────────
     groq_api_key: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
     av_api_key: str = field(default_factory=lambda: os.getenv("ALPHAVANTAGE_API_KEY", ""))
+    openrouter_api_key: str = field(default_factory=lambda: os.getenv("OPENROUTER_API_KEY", ""))
 
     def news_cache_path(self) -> str:
         return os.path.join(self.cache_dir, f"{self.ticker}_news.parquet")

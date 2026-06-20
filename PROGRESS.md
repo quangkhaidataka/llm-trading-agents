@@ -84,7 +84,13 @@ suite. Live run needs `make setup-full`.
 
 - M5 · **S51** next (Step 5) — conviction calibration (Layer 3: isotonic/Platt on 2022-2024 + reliability
   diagram), baselines (buy&hold / single-agent / AV-sentiment), and the ablation suite.
-- _Deferred (needs paid Groq tier or overnight throttled run):_ the full 2025-2026 live backtest.
+- **OpenRouter backbone added (ADR-015)** — Groq Dev tier unavailable + free tier can't finish the run,
+  so `make_llm` gained a `provider="openrouter"` branch (ChatOpenAI → OpenRouter, SAME Llama 3.3 70B /
+  Dec-2023 cutoff). Generalized `_StructuredJSON` wrapper used by both backbones; added
+  `ResearchStance.target_direction` str→int coercion; `config.provider` default = `"openrouter"` (Groq
+  kept for one-line switch-back). Verified live: 1-day OpenRouter smoke opened long @ 0.86 conviction.
+  `make check` green (83 unit + e2e). **The full 2025-2026 live backtest is now runnable (~$0.60); just
+  run `python -m src.main --mode backtest`.** For reproducibility, set `config.openrouter_provider`.
 
 ## Blocked
 

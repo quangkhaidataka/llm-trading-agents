@@ -7,9 +7,9 @@ Each agent is built as `prompt | llm.with_structured_output(Schema)`.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PortfolioState(BaseModel):
@@ -76,6 +76,13 @@ class ResearchStance(BaseModel):
     action: Literal["hold", "open", "close", "flip"]
     target_direction: Literal[-1, 0, 1]
     conviction: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("target_direction", mode="before")
+    @classmethod
+    def _coerce_direction(cls, v: Any) -> Any:
+        """LLMs (esp. via OpenRouter) often return this Literal-int as a string ("1");
+        Pydantic coerces str→float/bool but NOT str→Literal[int], so coerce it here."""
+        return int(float(v)) if isinstance(v, str) else v
 
 
 class TradeDecision(BaseModel):

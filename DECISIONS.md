@@ -17,6 +17,34 @@ Template:
 
 ---
 
+## ADR-015 · OpenRouter backbone (Groq free tier blocked the full run)
+- **Date:** 2026-06-20
+- **Status:** accepted (supersedes the "Groq-only" narrowing in S21/ADR-006)
+- **Decision:** Groq's Dev tier is unavailable and its free tier can't complete the backtest (ADR-014), so
+  **OpenRouter is added as a second online backbone** — exactly the swappable-backbone the architecture
+  was built for (spec §12.2 / RQ4 / F16), so the change is confined to the single seam `make_llm` plus
+  config. Specifics: (1) `_StructuredGroq` generalized to **`_StructuredJSON`** (provider-agnostic JSON-mode
+  + client-side `PydanticOutputParser` coercion) and used by BOTH the groq and openrouter branches;
+  `_groq_rate_limiter` generalized to `_shared_rate_limiter(rps)`. (2) New `make_llm` branch
+  `provider=="openrouter"` uses `ChatOpenAI` against `base_url=https://openrouter.ai/api/v1`, the SAME
+  Llama 3.3 70B (`meta-llama/llama-3.3-70b-instruct`, Dec-2023 cutoff → **anti-lookahead claim intact**),
+  with optional single-provider pin via `extra_body={"provider":{"order":[...],"allow_fallbacks":false}}`
+  for reproducibility (`config.openrouter_provider`; "" = auto-route). (3) `config.provider` default flipped
+  to `"openrouter"`; the **Groq branch is kept unchanged** so switching back is one config line. (4) Added a
+  `field_validator(mode="before")` on **`ResearchStance.target_direction`** to coerce a string `"1"` →
+  `1`: Pydantic coerces str→float/bool but NOT str→`Literal[int]`, and OpenRouter's provider stringifies
+  it. Config gains `openrouter_model/base_url/provider/requests_per_second/max_retries` + `openrouter_api_key`
+  (from `.env`); `requirements.txt` re-adds `langchain-openai==0.3.35`.
+- **Reason:** OpenRouter is pay-as-you-go (no Dev-tier waitlist), cheaper (~$0.10/$0.32 per M tok → full
+  backtest ~$0.60), has no 100k-tokens/day cap, and serves the identical model so the research claims hold.
+  Keeping both backbones behind `config.provider` is the design's whole point and advances F16.
+- **Rejected alternatives:** Groq Dev tier (unavailable); a direct provider like DeepInfra/Together (fine
+  and even more reproducible, but OpenRouter is more flexible and a provider pin recovers reproducibility);
+  loosening the `Literal` field type (the before-validator is the sanctioned schema hardening).
+- **Consequences:** dev venv now has `langchain-openai`; `make check` green (83 unit + e2e), offline
+  unaffected (MockLLM). The full live 2025-2026 backtest is now runnable for ~$0.60. For strict
+  reproducibility set `openrouter_provider` to one backend. S21 plan doc updated.
+
 ## ADR-014 · Live-run hardening (Groq json_mode, OpenMP, rate-limit) + free-tier finding
 - **Date:** 2026-06-19
 - **Status:** accepted
