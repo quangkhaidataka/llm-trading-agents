@@ -99,16 +99,19 @@ class PositionManager:
         self, state: PortfolioState, stance: ResearchStance, pos: Position, target: Position, conviction: float
     ) -> TradeDecision:
         cfg = self.config
+        # no-hysteresis ablation (use_hysteresis=False): collapse the dead-band by exiting at the
+        # SAME bar as entry (tau_enter), so there is no sticky enter↔exit asymmetry.
+        tau_exit = cfg.tau_exit if cfg.use_hysteresis else cfg.tau_enter
 
         # close conditions take precedence (thesis broken OR conviction decayed)
         if not stance.thesis_still_valid:
             return TradeDecision(
                 new_position=0, new_thesis="", vetoed=False, reason="close (thesis invalidated)"
             )
-        if conviction <= cfg.tau_exit:
+        if conviction <= tau_exit:
             return TradeDecision(
                 new_position=0, new_thesis="", vetoed=False,
-                reason=f"close (conviction {conviction:.2f} <= tau_exit {cfg.tau_exit})",
+                reason=f"close (conviction {conviction:.2f} <= tau_exit {tau_exit})",
             )
 
         # opposite-direction signal → flip only on a very high bar

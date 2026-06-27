@@ -6,6 +6,8 @@ venv/
 .DS_Store
 data/*.parquet
 data/*.json
+data/*.jsonl
+data/*_memory/
 data/sample_data/
 logs/
 .ipynb_checkpoints/

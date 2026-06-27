@@ -9,8 +9,10 @@ the SAME Llama 3.3 70B (Dec-2023 cutoff → the anti-lookahead claim holds eithe
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import threading
 from typing import Any
 
 from config import Config, config
@@ -139,11 +141,116 @@ def _shared_rate_limiter(requests_per_second: float) -> Any:
     return _RATE_LIMITER
 
 
+class _LLMCache:
+    """Process-wide PERSISTENT cache of structured LLM outputs (spec §6, §12.6).
+
+    Key = sha256(rendered prompt messages + schema name + temperature). Because the key IS the
+    exact rendered prompt (which already encodes ticker/date/news/upstream signals AND the prompt
+    template text), a cache hit can only ever return the response for that identical point-in-time
+    input — so reruns/ablations/sweeps cost no API calls, and changing a prompt (e.g. the debate
+    prompt) MISSES correctly instead of replaying a stale answer. Stored as append-only JSONL
+    (O(1) writes, crash-safe). Per key we keep a LIST replayed in call order, so the DebateAgent's
+    K self-consistency samples (same prompt, K varied draws) are cached + reproduced faithfully."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.store: dict[str, list[dict]] = {}
+        self.counter: dict[str, int] = {}
+        self.lock = threading.Lock()
+        if os.path.exists(path):
+            with open(path) as fh:
+                for line in fh:
+                    if line.strip():
+                        rec = json.loads(line)
+                        self.store.setdefault(rec["key"], []).append(rec["payload"])
+
+    @staticmethod
+    def key(prompt_value: Any, schema: type, temperature: float) -> str:
+        msgs = prompt_value.to_messages() if hasattr(prompt_value, "to_messages") else prompt_value
+        if isinstance(msgs, list):
+            text = "\n".join(f"{getattr(m, 'type', '?')}:{getattr(m, 'content', m)}" for m in msgs)
+        else:
+            text = str(msgs)
+        raw = f"{schema.__name__}|{temperature}|{text}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def get_or_compute(self, key: str, compute) -> dict:
+        """Return the next cached payload for `key` (by call order), else compute it, append, and
+        persist. The expensive compute runs OUTSIDE the lock."""
+        with self.lock:
+            n = self.counter.get(key, 0)
+            self.counter[key] = n + 1
+            pool = self.store.get(key)
+            if pool is not None and n < len(pool):
+                return pool[n]  # hit
+        payload = compute().model_dump()  # miss — real LLM call (slow), not under the lock
+        with self.lock:
+            self.store.setdefault(key, []).append(payload)
+            with open(self.path, "a") as fh:
+                fh.write(json.dumps({"key": key, "payload": payload}) + "\n")
+        return payload
+
+
+class _CachingStructured:
+    """Wraps an inner structured-output runnable; consults the cache around `.invoke`."""
+
+    def __init__(self, inner: Any, schema: type, cache: _LLMCache, temperature: float) -> None:
+        self._inner = inner
+        self._schema = schema
+        self._cache = cache
+        self._temp = temperature
+
+    def invoke(self, prompt_value: Any, **kwargs: Any) -> Any:
+        key = self._cache.key(prompt_value, self._schema, self._temp)
+        payload = self._cache.get_or_compute(key, lambda: self._inner.invoke(prompt_value, **kwargs))
+        return self._schema(**payload)
+
+    def __call__(self, prompt_value: Any) -> Any:
+        return self.invoke(prompt_value)
+
+
+class _CachingLLM:
+    """Transparent caching layer over an online backbone — same `with_structured_output(Schema)`
+    contract, so no agent code changes (the cache lives only at this seam)."""
+
+    def __init__(self, inner: Any, cache: _LLMCache, temperature: float) -> None:
+        self._inner = inner
+        self._cache = cache
+        self._temp = float(temperature)
+
+    def with_structured_output(self, schema: type, **kwargs: Any) -> _CachingStructured:
+        return _CachingStructured(
+            self._inner.with_structured_output(schema, **kwargs), schema, self._cache, self._temp
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+_CACHES: dict[str, _LLMCache] = {}
+
+
+def _get_cache(path: str) -> _LLMCache:
+    """One shared cache per file path (so every agent + the debate K-samples share one budget)."""
+    if path not in _CACHES:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        _CACHES[path] = _LLMCache(path)
+    return _CACHES[path]
+
+
+def _maybe_cache(inner: Any, config: Config) -> Any:
+    """Wrap an online backbone in the persistent prompt-hash cache when enabled."""
+    if not config.use_llm_cache:
+        return inner
+    return _CachingLLM(inner, _get_cache(config.llm_cache_path()), config.temperature)
+
+
 def make_llm(config: Config):
     """Return MockLLM (offline) or the online backbone chosen by config.provider.
 
     The single instantiation seam: callers only ever do
-    `make_llm(config).with_structured_output(Schema)`."""
+    `make_llm(config).with_structured_output(Schema)`. Online backbones are wrapped in a persistent
+    prompt-hash cache (`config.use_llm_cache`) so reruns cost no API calls."""
     if config.offline:
         return MockLLM(seed=config.seed)
 
@@ -158,18 +265,19 @@ def make_llm(config: Config):
                 "order": [config.openrouter_provider],
                 "allow_fallbacks": False,
             }
-        return _StructuredJSON(
+        return _maybe_cache(_StructuredJSON(
             ChatOpenAI(
                 model=config.openrouter_model,
                 temperature=config.temperature,
                 api_key=SecretStr(config.openrouter_api_key),
                 base_url=config.openrouter_base_url,
                 max_retries=config.openrouter_max_retries,
+                timeout=config.llm_timeout,  # stalled call fails → retried (never hangs the run)
                 rate_limiter=_shared_rate_limiter(config.openrouter_requests_per_second),
                 extra_body=extra_body,
             ),
             parse_retries=config.llm_parse_retries,
-        )
+        ), config)
 
     if config.provider == "groq":
         from langchain_groq import ChatGroq  # import kept function-local
@@ -177,15 +285,16 @@ def make_llm(config: Config):
 
         # Client-side throttle + retries so a live run survives Groq's per-minute token cap
         # (free tier ~12k TPM) instead of crashing on the first 429.
-        return _StructuredJSON(
+        return _maybe_cache(_StructuredJSON(
             ChatGroq(
                 model=config.model_id,
                 temperature=config.temperature,
                 api_key=SecretStr(config.groq_api_key),
                 max_retries=config.groq_max_retries,
+                timeout=config.llm_timeout,  # stalled call fails → retried (never hangs the run)
                 rate_limiter=_shared_rate_limiter(config.groq_requests_per_second),
             ),
             parse_retries=config.llm_parse_retries,
-        )
+        ), config)
 
     raise ValueError(f"unknown provider: {config.provider}")

@@ -65,6 +65,30 @@ def _write_table(rows: list[dict], csv_path: str, md_path: str) -> None:
 ## How It Connects
 The ablation suite is where the whole Step-5 machinery pays off as evidence: the warm-up of S5.1 left a frozen calibrator and a warmed memory, the S5.2 baselines fixed the yardsticks, and now each ablation reruns the *identical* compiled graph and dollar-accounting loop with exactly one feature flag flipped — the LangGraph builder reads that flag and quietly bypasses a node (no MacroAgent, no debate, no retrieval, or a stateless re-decide), so the only thing that differs between two rows of the table is the one component under test. Because every variant shares the same test window, the same fees, the same frozen calibrator and the same LLM cache, the suite is both cheap to rerun and rigorously fair, and the resulting `ablation_table.md` reads as a direct, side-by-side attribution: how much Sharpe memory adds, how much turnover hysteresis removes, whether debate beats raw analyst signals — the scientific spine of the final report (Step 6).
 
+## Additional experiments folded in (first live run: under-investment / never-shorts / churn)
+
+The first live backtest (2025–2026: +9.1% vs buy & hold +23.0%, flat 65% of days, 0 shorts, fees ~40% of
+gross) motivates three extra experiments. Each stays a **`Config` toggle / new knob over the same engine**
+(no code fork), and each is scored as one more row in `ablation_table.md` against `full`:
+
+- **`risk_off` veto: persistence / size-down** (`risk_off_persistence: int = 1`, `risk_off_mode: "flat"|"size_down"`).
+  The `regime == risk_off` veto was the biggest forced-flat driver (52 days) and also ejected positions
+  during recoveries. Variant: require ≥2 consecutive risk-off sessions to fire, or down-size instead of
+  forcing flat. Tests whether the crash-avoidance edge survives a less twitchy veto.
+- **Turnover control** (`min_holding_days: int = 0`, and/or a wider `tau_enter↔tau_exit` dead-band).
+  Avg hold was 3.2 days; fees ate ~40% of gross P&L. Variant: enforce a minimum holding period and/or
+  smooth the thesis-invalidation gate (the LLM flipping its own thesis day-to-day, which the taus do not
+  touch). Tests how much fee drag is recoverable without hurting return.
+- **Shorts on/off + short-trade expectancy** (`allow_short` already exists). With Gate-A (ADR-016) +
+  Gate-B (abstention `agreement`) in place, run `allow_short=True` vs `False` and **report short-trade
+  expectancy on the 2022–2024 warm-up** before trusting shorts in the test window. If warm-up shows no
+  short edge, calibration should keep shorts rare (the system working, not failing).
+
+These are **stretch rows** — they must not block `F14` (the original five ablations are the acceptance
+bar). New knobs go in `config.py` with safe defaults that reproduce current behavior
+(`risk_off_persistence=1`, `risk_off_mode="flat"`, `min_holding_days=0`). Validate any threshold/knob on
+the **2022–2024 warm-up** and freeze before the test (never tune on the 2025–2026 curve).
+
 ## Key Technology, Design Patterns & Packages
 - **Config-flag Strategy pattern** — each ablation is a `dataclasses.replace` of one base `Config`; the graph selects which nodes to run from the flags, so behavior varies without a single code fork (the project's "ablations are toggles, not forks" rule).
 - **LangGraph conditional node bypass** — the Step-3 builder includes/skips nodes (MacroAgent, DebateAgent, MemoryStore retrieval, hysteresis band) by feature flag, the mechanism that makes one engine serve every variant.
@@ -73,10 +97,10 @@ The ablation suite is where the whole Step-5 machinery pays off as evidence: the
 - **matplotlib (`plot_equity` reuse)** — per-variant curves under `results/curves/`, drawn with the same helper as the strategy and baselines for visual consistency.
 
 ## Definition of Done
-- [ ] **Acceptance command:** `.venv/bin/python -m src.main --mode ablation` (and `.venv/bin/python -m pytest tests/test_eval.py -k ablation -q`).
-- [ ] **Tests:** offline & deterministic (`Config(offline=True)`, `MockLLM`, fixtures, shared LLM cache — no network). Every variant (`full`, `stateless`, `no_memory`, `no_macro`, `no_debate`, `no_hysteresis`) **runs through the SAME compiled graph + dollar-accounting loop + frozen calibrator** with exactly one flag flipped, and **each emits a metrics row** (total return, Sharpe, Sortino, MaxDD, hit rate, turnover, avg holding period).
-- [ ] **Gate:** `make check` green (lint + typecheck + test + e2e).
-- [ ] **features.json:** `F14` → `passing` with evidence (the passing `--mode ablation` run + date; `ablation_table.md` path). M5a acceptance = comparison table + reliability diagram produced.
-- [ ] **Artifacts:** `results/ablation_table.csv` + `results/ablation_table.md` (one row per variant **and** the three S5.2 baselines); `results/curves/<variant>.csv` (+ optional `.png`).
-- [ ] **Rules:** ablations are **`Config` feature-flag toggles over ONE engine — no code forks** (`dataclasses.replace`, graph bypasses nodes by flag); all variants **reuse the shared LLM cache + the frozen `results/calibrator.pkl`** and hold `test_start/end`, `fee_bps`, `tau_*`, `h` constant; **never report warm-up PnL**.
-- [ ] **Tracking:** `PROGRESS.md` updated; **add the ablation feature flags to `config.py`** (`use_memory/use_macro/use_debate/use_hysteresis=True`, `stateless=False`) if not already present; `DECISIONS.md` ADR for the no-hysteresis collapse rule (`tau_exit := tau_enter`) or any non-obvious flag semantics.
+- [x] **Acceptance command:** `.venv/bin/python -m pytest tests/test_eval.py -k ablation -q` → 3 passed (✅ 2026-06-25); `--mode ablation` wired (`run_ablations`).
+- [x] **Tests:** offline & deterministic. Every variant (`full`, `stateless`, `no_memory`, `no_macro`, `no_debate`, `no_hysteresis`) runs through the SAME `Backtester` loop with one flag flipped and emits a full metrics row; `make_variant_config`, `_write_table`, and the no-hysteresis collapse have unit tests. Integration runs over a short (~6-session) window for speed (each obs still carries full history ≤ t).
+- [x] **Gate:** `make check` green (lint + typecheck + 105 unit + e2e); check-lookahead clean (variants reuse the t+1 loop; test window only).
+- [x] **features.json:** `F14` → `passing` (ADR-022).
+- [x] **Artifacts:** `results/ablation_table.{csv,md}` (6 variant rows + the 3 S5.2 baselines) + `results/curves/<variant>.csv`. (MD written manually — no `tabulate` dep; per-variant `.png` skipped, optional.)
+- [x] **Rules:** `Config` toggles over ONE engine — no code forks (`dataclasses.replace`); variants reuse the LLM cache + the frozen calibrator (when present) and hold `test_start/end`, `fee_bps`, `tau_*`, `h` constant; test window only (no warm-up PnL). `use_hysteresis` wired into the PositionManager (collapse `tau_exit:=tau_enter`).
+- [x] **Tracking:** `PROGRESS.md` updated; ablation flags already in `config.py`; `DECISIONS.md` **ADR-022** records the no-hysteresis collapse + `Backtester.run(write=)` + the deferred stretch experiments.

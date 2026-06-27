@@ -102,24 +102,24 @@
       "milestone": "M5",
       "behavior": "Baselines computed and compared: buy & hold, single-agent (News only), and pure AV-sentiment.",
       "verification": ".venv/bin/python -m pytest tests/test_eval.py -k baseline -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S52 @ 2026-06-25 (ADR-021): src/eval/baselines.py — buy&hold (always long), av_sentiment (sign of per-day AV ticker_sentiment_score = baseline-to-beat, NOT the signal), single_agent (NewsAgent signal only, cached LLM); all three pushed through the SAME Backtester._run_accounting dollar loop ($1M base, t+1, fee-on-change) + compute_metrics, curves to results/curves/baseline_*.csv, + corr(LLM_sentiment, AV_score) diagnostic. tests/test_eval.py 5 passed (each baseline: full metric set + curve starts at C0; 3 curves + corr written). make check green (99 unit + e2e); check-lookahead clean (decisions <= t via get_observation, exec t+1, test window only). Metric rows fold into the S5.3 ablation_table."
     },
     {
       "id": "F14",
       "milestone": "M5",
       "behavior": "Ablations runnable via config variants: stateless-classifier, no-memory, no-macro, no-debate, no-hysteresis.",
       "verification": ".venv/bin/python -m src.main --mode ablation",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S53 @ 2026-06-25 (ADR-022): src/eval/ablation.py — ABLATION_VARIANTS (full/stateless/no_memory/no_macro/no_debate/no_hysteresis) each a dataclasses.replace config toggle over the SAME graph + Backtester.run(write=False) loop; run_ablations stacks the 6 variant rows + the 3 S5.2 baselines into results/ablation_table.{csv,md} + per-variant curves. use_hysteresis wired into PositionManager (collapse tau_exit:=tau_enter; resolves ADR-010/011 deferral); stateless already in run_one_day. tests/test_eval.py -k ablation 3 passed (+ make_variant_config/_write_table/no-hysteresis unit tests) over a short window for speed. make check green (105 unit + e2e); check-lookahead clean (variants reuse the t+1 loop, test window only). NOTE: the S5.3 stretch experiments (risk_off persistence/size-down, min_holding, short-expectancy) are deferred — they don't block F14."
     },
     {
       "id": "F15",
       "milestone": "M5",
       "behavior": "Conviction calibrated to empirical P(correct) (isotonic/Platt) on 2022-2024 with a reliability diagram.",
       "verification": ".venv/bin/python -m pytest tests/test_calibration.py -q",
-      "state": "not_started",
-      "evidence": ""
+      "state": "passing",
+      "evidence": "S51 @ 2026-06-23 (ADR-019): src/eval/calibration.py Layer 3 — Calibrator (isotonic primary, Platt fallback <calibration_min_isotonic), fit_calibrator, reliability_diagram (Brier+ECE), _hit_label (== memory reward >0), WarmupPair/collect_warmup_pairs/run_warmup_calibration; --mode warmup wires it; conviction_node applies the frozen z->P(correct) when present (raw z offline/before warmup). tests/test_calibration.py 11 passed (isotonic monotonicity; mis-scaled z bent toward diagonal w/ Brier+ECE improving; hit-label sign; identity fallback; reliability PNG). make check green (89 unit + e2e); check-lookahead clean (forward prices used only for the frozen training label). NOTE: warm-up FAISS disk persistence deferred (ADR-019)."
     },
     {
       "id": "F16",
@@ -136,6 +136,14 @@
       "verification": ".venv/bin/python -m pytest tests/test_smoke.py -k ticker -q",
       "state": "active",
       "evidence": "config-level guard passing @ 2026-06-18; full-pipeline acceptance pending M4"
+    },
+    {
+      "id": "F18",
+      "milestone": "M5",
+      "behavior": "Interactive explainable web report: one self-contained results/report.html — a clickable cumulative-PnL chart (strategy vs buy & hold) where clicking a day shows that day's news read, per-agent signal + rationale (News/Macro/Technical/Memory), the bull/bear/thesis debate, the conviction, and the final decision + reason.",
+      "verification": ".venv/bin/python -m pytest tests/test_report.py -q",
+      "state": "passing",
+      "evidence": "S61 @ 2026-06-26 (ADR-026): src/eval/report.py — build_report_html reads results/equity_curve.csv + results/trace.json ONLY (never recomputes), builds a Plotly (CDN) cumulative-PnL figure with clickable daily points, embeds the trace JSON inline + a plotly_click->side-panel handler, writes one self-contained results/report.html (no server, no fetch, stdlib + pandas only, no new requirements entry). Acceptance command writes results/report.html (built from the headline tau05online run: equity_curve_tau05online.csv + trace_tau05online.json, 1.5MB, opens off disk). tests/test_report.py 4 passed (self-contained HTML; trace embedded inline + clickable; 2 cum_pnl traces JSON-serializable; trace re-keyed by ISO date); ruff + mypy clean on the new files; full suite 112 passed. NOTE: repo-wide `make check` is red ONLY on a pre-existing unrelated lint line (config.py:56, >120 chars) owned by the user, not on any S61 code."
     }
   ]
 }

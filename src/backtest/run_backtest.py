@@ -120,7 +120,10 @@ class Backtester:
         return records
 
     # ── full run: think forward (point-in-time), then account, then persist ─────
-    def run(self) -> dict:
+    def run(self, write: bool = True) -> dict:
+        """Walk the test window and return {equity, metrics, trace}. `write=False` skips the
+        results/ artifact dump so an ablation variant (S5.3) can reuse the SAME loop without
+        clobbering the main backtest's artifacts."""
         import pandas as pd
 
         from src.data.loaders import load_prices
@@ -130,6 +133,8 @@ class Backtester:
 
         cfg = self.config
         store = MemoryStore(cfg)
+        if not cfg.offline:  # warm-start from the persisted warm-up memory (online only → offline stays
+            store.load()     # hermetic, independent of any data/{ticker}_memory on disk)
         app = build_graph(cfg, store)
 
         # Test-window sessions = price index in [test_start, test_end]. We only ever loop the
@@ -160,7 +165,8 @@ class Backtester:
         position = pd.Series([r.position for r in records], index=idx, dtype=float)
         price = pd.Series([r.price for r in records], index=idx, dtype=float)
         metrics = self._metrics(records, equity, position, price)
-        self._write_artifacts(records, metrics, equity, price)
+        if write:
+            self._write_artifacts(records, metrics, equity, price)
 
         equity_rows = [{"date": r.t.isoformat(), "equity": r.equity,
                         "cum_pnl_strategy": r.cum_pnl_strategy,

@@ -12,9 +12,11 @@ rhythm: stage(t) after the decision, flush_due(t) to close + index any episode w
 t+1+h window has elapsed (delayed write, point-in-time). The commit node writes a full
 per-day decision trace to config.log_dir — the source the Step-6 web report reads.
 
-Conviction note: the number passed to the PositionManager is the RAW score z (composite +
-self-consistency). The Step-5 isotonic/Platt calibrator (Layer 3) will map z -> P(correct)
-in front of the PositionManager; until then z is used directly.
+Conviction note: the conviction node computes the RAW score z (composite + self-consistency),
+then maps it through the FROZEN Layer-3 calibrator (z -> P(correct)) when one is present, so the
+PositionManager thresholds a real probability. With no calibrator (offline, or before S5.1 warm-up)
+it falls back to raw z. Warm-up (collect_warmup_pairs) builds the graph with calibrator=None so the
+(z, hit) pairs it collects are the RAW z the calibrator is fit on.
 """
 
 from __future__ import annotations
@@ -47,6 +49,7 @@ from src.schemas import (
 )
 
 _DIR = {"long": 1, "flat": 0, "short": -1}
+_AUTOLOAD = object()  # build_graph default: auto-load the frozen calibrator (None offline / if absent)
 
 
 class GraphState(TypedDict):
@@ -63,13 +66,20 @@ class GraphState(TypedDict):
     decision: TradeDecision
 
 
-def build_graph(config: Config, store: MemoryStore):
+def build_graph(config: Config, store: MemoryStore, calibrator=_AUTOLOAD):
     """Wire and compile the per-day graph. Returns the compiled LangGraph app.
 
     Topology is fixed (observe -> 4 analysts -> debate -> conviction -> position_manager
     -> commit); the ablation flags change what individual nodes PRODUCE rather than forking
-    the graph (use_macro/use_memory/use_debate)."""
+    the graph (use_macro/use_memory/use_debate).
+
+    `calibrator`: the frozen z->P(correct) map applied in the conviction node. Default `_AUTOLOAD`
+    loads `config.calibrator_path()` when present and online (None offline → hermetic tests / raw z);
+    pass `calibrator=None` to force raw z (warm-up), or an explicit Calibrator to inject one."""
     from langgraph.graph import END, START, StateGraph
+
+    if calibrator is _AUTOLOAD:
+        calibrator = _maybe_load_calibrator(config)
 
     news_agent = NewsAgent(config)
     macro_agent = MacroAgent(config)
@@ -124,6 +134,8 @@ def build_graph(config: Config, store: MemoryStore):
             z = raw_conviction(z_raw, z_sc, config)
         else:
             z = z_raw
+        if calibrator is not None:  # Layer 3: map raw z -> calibrated P(correct) when frozen
+            z = calibrator.predict_proba(z)
         return {"conviction": z}
 
     def position_manager_node(state: GraphState) -> dict:
@@ -189,6 +201,19 @@ def run_one_day(app, t: date, portfolio: PortfolioState, store: MemoryStore) -> 
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+def _maybe_load_calibrator(config: Config):
+    """Auto-load the frozen calibrator for the live path. Returns None offline (keeps make check
+    hermetic — independent of any gitignored results/calibrator.pkl on disk) or if the file is
+    absent (before S5.1 has produced one)."""
+    import os
+
+    if config.offline or not os.path.exists(config.calibrator_path()):
+        return None
+    from src.eval.calibration import Calibrator
+
+    return Calibrator.load(config.calibrator_path())
+
+
 def _apply(old: PortfolioState, decision: TradeDecision, obs: Observation) -> PortfolioState:
     """Fold a TradeDecision into the next PortfolioState (entry/thesis/days_held)."""
     pos = decision.new_position
@@ -261,6 +286,7 @@ def _write_trace(config: Config, state: GraphState) -> None:
             "bear_case": state["stance"].bear_case,
             "thesis_still_valid": state["stance"].thesis_still_valid,
             "action": state["stance"].action,
+            "target_direction": state["stance"].target_direction,  # the debate's directional VIEW (calibration label)
         },
         "conviction": state["conviction"],
         "decision": state["decision"].model_dump(),

@@ -59,6 +59,36 @@ def test_delayed_write_retrievable_only_at_t_plus_1_plus_h() -> None:
     assert got[0].outcome_closed_t == close_day
 
 
+def test_persistence_roundtrip_warms_a_fresh_store(tmp_path) -> None:
+    """A2 (ADR-023): save() the warmed FAISS index + episodes, then a FRESH store load()s them and
+    can retrieve the same closed episode — i.e. warm-up memory survives into a separate process."""
+    cfg = Config(offline=True)
+    h = cfg.h
+    store = MemoryStore(cfg)
+    prices = _prices([100.0 + i for i in range(40)])
+    days = [ts.date() for ts in prices.index]
+
+    store.stage(_obs(days[5]), action=1)
+    close_day = days[5 + 1 + h]
+    store.flush_due(close_day, prices)            # closes + indexes the episode
+    assert store.index is not None and store.index.ntotal == 1
+
+    mem_dir = str(tmp_path / "mem")
+    store.save(mem_dir)
+
+    warm = MemoryStore(cfg).load(mem_dir)          # a fresh process inherits the warmed memory
+    assert warm.index is not None and warm.index.ntotal == 1
+    assert len(warm.closed) == 1
+    got = warm.retrieve(_obs(close_day), k=cfg.k)
+    assert len(got) == 1 and got[0].action == 1 and got[0].outcome_closed_t == close_day
+
+
+def test_load_is_noop_when_absent() -> None:
+    """No persisted memory on disk → load() is a clean no-op (cold start preserved)."""
+    store = MemoryStore(Config(offline=True)).load("/nonexistent/path/xyz")
+    assert store.index is None and store.closed == []
+
+
 def test_reward_long_beats_short_same_situation() -> None:
     cfg = Config(offline=True)  # aapl_drift
     # 21 flat sessions (mu ≈ 0) then a rising tail → forward_return > 0 at t = day 20.

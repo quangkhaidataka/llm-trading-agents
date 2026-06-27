@@ -65,6 +65,43 @@ class MemoryStore:
             Episode(t=obs.t, state_text=obs.to_memory_text(), action=action)
         )
 
+    def save(self, path: str | None = None) -> None:
+        """Persist the FAISS index + episode metadata so a later run inherits the WARMED memory
+        (warm-up → test carry; ADR-019 follow-up). The closed Episodes stay 1:1 with the index rows.
+        Pending (not-yet-closed) episodes are carried too so a window that opened near warmup_end can
+        still close — point-in-time — early in the test."""
+        import os
+        import pickle
+
+        import faiss
+
+        path = path or self.config.memory_path()
+        os.makedirs(path, exist_ok=True)
+        if self.index is not None:
+            faiss.write_index(self.index, os.path.join(path, "index.faiss"))
+        with open(os.path.join(path, "episodes.pkl"), "wb") as fh:
+            pickle.dump({"closed": self.closed, "pending": self.pending}, fh)
+
+    def load(self, path: str | None = None) -> MemoryStore:
+        """Warm-start from a persisted index + episodes (no-op if absent). Returns self.
+        The caller decides WHEN to load (the backtest loads only online, to keep offline hermetic)."""
+        import os
+        import pickle
+
+        import faiss
+
+        path = path or self.config.memory_path()
+        idx_path = os.path.join(path, "index.faiss")
+        ep_path = os.path.join(path, "episodes.pkl")
+        if os.path.exists(idx_path):
+            self.index = faiss.read_index(idx_path)
+        if os.path.exists(ep_path):
+            with open(ep_path, "rb") as fh:
+                data = pickle.load(fh)
+            self.closed = data.get("closed", [])
+            self.pending = data.get("pending", [])
+        return self
+
     def flush_due(self, current_t: date, price_series) -> None:
         """Close every pending episode whose t+1+h trading day exists and is <= current_t:
         compute its drift-demeaned reward, embed it, and add it to the FAISS index."""

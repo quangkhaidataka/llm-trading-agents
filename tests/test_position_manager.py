@@ -2,7 +2,7 @@
 
 Pure rule engine (no LLM, no randomness). Covers the FULL current_position × signal
 transition table and veto-overrides-strong-signal. Thresholds from config:
-tau_enter=0.70, tau_exit=0.40, tau_flip=0.80, vol_cap=0.40, dd_cap=-0.15,
+tau_enter=0.60, tau_exit=0.40, tau_flip=0.70, vol_cap=0.40, dd_cap=-0.15,
 macro_risk_cap=0.70, disagreement_cap=0.70.
 """
 
@@ -92,11 +92,27 @@ def test_flip_long_to_short_at_tau_flip() -> None:
     assert out.new_position == -1 and out.new_thesis == "bear"
 
 
+def test_no_hysteresis_collapses_exit_to_tau_enter() -> None:
+    """no-hysteresis ablation (use_hysteresis=False): the dead-band collapses, so a held position
+    whose conviction sits between tau_exit and tau_enter HOLDS with hysteresis but CLOSES without it."""
+    state = PortfolioState(current_position=1, active_thesis="launch", days_held=5)
+    cfg = Config(offline=True)  # tau_exit=0.40 < conviction < tau_enter=0.60
+    conviction = (cfg.tau_exit + cfg.tau_enter) / 2  # 0.50
+    held = _decide(cfg, state, _stance(target=1, valid=True), conviction=conviction)
+    assert held.new_position == 1  # hysteresis: above tau_exit, same direction → hold
+
+    flat = _decide(Config(offline=True, use_hysteresis=False), state,
+                   _stance(target=1, valid=True), conviction=conviction)
+    assert flat.new_position == 0  # no dead-band: exits at tau_enter → close
+
+
 def test_opposite_signal_below_tau_flip_holds() -> None:
     cfg = Config(offline=True)
     state = PortfolioState(current_position=1, active_thesis="launch", days_held=5)
-    # 0.75: above tau_exit (not a close), opposite direction, but below tau_flip (not a flip) → hold
-    out = _decide(cfg, state, _stance(target=-1, valid=True), conviction=0.75)
+    # between tau_exit and tau_flip: above tau_exit (not a close), opposite direction,
+    # but below tau_flip (not a flip) → hold. Derived from config so it tracks any tuning.
+    conviction = (cfg.tau_exit + cfg.tau_flip) / 2
+    out = _decide(cfg, state, _stance(target=-1, valid=True), conviction=conviction)
     assert out.new_position == 1 and out.new_thesis == "launch"
 
 
@@ -117,7 +133,8 @@ def test_flip_to_short_blocked_closes_to_flat() -> None:
 # ── veto overrides even a tau_flip-strength signal ───────────────────────────
 def test_veto_high_volatility() -> None:
     cfg = Config(offline=True)
-    out = _decide(cfg, PortfolioState(current_position=0), _stance(target=1), conviction=0.95, vol=0.50)
+    vol = cfg.vol_cap + 0.10  # above the cap → veto, regardless of the configured level
+    out = _decide(cfg, PortfolioState(current_position=0), _stance(target=1), conviction=0.95, vol=vol)
     assert out.vetoed and out.new_position == 0
 
 

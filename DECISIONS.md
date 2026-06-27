@@ -17,6 +17,389 @@ Template:
 
 ---
 
+## ADR-026 · S6.1 web report: token-replace template, reads artifacts only, ablations skipped for reporting
+- **Date:** 2026-06-26
+- **Status:** accepted
+- **Decision:** `src/eval/report.py::build_report_html(equity_csv, trace_json, out_path)` builds ONE
+  self-contained `results/report.html` (F18): a Plotly cumulative-PnL chart (strategy vs buy & hold) whose
+  daily points are clickable, with the entire per-day decision trace embedded inline as JSON and a
+  `plotly_click` handler that paints the clicked day's reasoning (news read · each analyst signal+rationale ·
+  bull/bear/thesis · conviction · final call+reason) into a side panel. Three implementation choices:
+  (1) **Token `str.replace` (`__PLOTLY_CDN__`/`__CHART_JSON__`/`__TRACE_JSON__`) instead of `str.format`** —
+  the page is mostly JS/CSS, so `.format`'s `{{`/`}}` brace-doubling would be pervasive and error-prone; the
+  plan's skeleton named `.format` holes but it is "structure + intent only", and token-replace is the simpler
+  faithful realization (same two data holes, same self-contained output). (2) **`_build_chart_figure` prefers
+  `cum_pnl_*` columns, falls back to `equity_*`** — matches the Step-4 CSV that exists on disk while honoring
+  the plan's "or `cum_pnl_*`" note. (3) **HTML-escape (`esc`) in the browser, not Python** — the trace is
+  embedded as JSON (safe) and rendered to HTML client-side, so escaping lives next to the DOM write.
+- **Headline-result wiring:** the user fixed the blog/headline result to the **`tau05online`** live run
+  (`tau_enter=0.50`) **truncated to ≤ 2026-05-01** (333 of 366 sessions). The committed sample `report.html`
+  is built from truncated artifacts derived from the full run — `equity_curve_tau05online_thru01May2026.csv`
+  + `trace_tau05online_thru01May2026.json` (the full run minus rows/records dated > 2026-05-01) — so the
+  chart and the click-to-explain panel both end exactly at the headline endpoint (no post-cutoff data,
+  incl. the May AAPL rally, leaks into the page). `build_report_html` is path-generic, so this is just a
+  choice of inputs, not a code change. The user also **decided to stop running the ablation suite** (S53/F14
+  code stays, but `--mode ablation` is not re-run) — final reporting (S6.3 notebook/README) leads with the
+  headline result, not an ablation table.
+- **Reason:** explainability is the deliverable, not styling — one chart + one panel, zero new dependency
+  (Plotly via CDN, stdlib + pandas), self-contained so a reviewer double-clicks it. Reading
+  `equity_curve.csv` + `trace.json` only (never recomputing) keeps the report a pure view over Step-4
+  artifacts, so it can never disagree with the backtest or reintroduce look-ahead.
+- **Rejected alternatives:** Flask/Dash/Jinja or a served app (YAGNI; a static file is more portable and
+  committable); `str.format` with brace-doubling (noisy/fragile across the JS); recomputing PnL/metrics in
+  the report (would duplicate Step-4 and risk divergence); an external `report.json` loaded via `fetch`
+  (breaks open-from-disk + adds CORS); wiring a `--mode report` CLI (not in the plan; the `python -c`
+  acceptance command + the notebook link suffice).
+- **Consequences:** no new `requirements.txt` entry; `results/report.html` gitignored (committable as a
+  sample). `tests/test_report.py` (4) + ruff + mypy clean on the new files; full unit suite 112 passed.
+  **Repo-wide `make check` is red ONLY on a pre-existing unrelated lint line** (`config.py:56` >120 chars,
+  owned by the user) — no S61 code is implicated. F18 → `passing`. S6.3 (notebook/README) links this report
+  as the headline explainability demo.
+
+## ADR-025 · Calibration hit-label = target_direction (the debate's VIEW), not the executed action
+- **Date:** 2026-06-25
+- **Status:** accepted (revises the hit-label choice in ADR-019, for CALIBRATION only)
+- **Decision:** The conviction calibrator's hit label now grades the debate's proposed **`target_direction`**
+  (was the executed `decision.new_position`), and days where the debate proposed **no view (`target == 0`)
+  are EXCLUDED** from the calibration set. The first live warm-up (executed-action label) produced a
+  degenerate calibration: 316 flat days were labeled hit=0 (a flat day is "no bet", not a "wrong bet"), the
+  calibrated conviction maxed at 0.667, and the hit-rate at low conviction was 34% (BELOW coin flip — the
+  pollution signature), so `tau_enter=0.60` would have traded ~3 days in 3 years. `tau_enter` gates the
+  ENTRY decision, so the correct calibration target is "given conviction z, is the proposed DIRECTION
+  correct?" — independent of whether veto/hysteresis let us act. Implementation: added `target_direction` to
+  the per-day trace (`_write_trace`); `collect_warmup_pairs` reads it (`_read_trace_fields`), skips
+  `target==0`, and grades it via `_hit_label`; the **memory reward stays executed-action** (different
+  purpose — "what happened when we took this action"). Re-run cost **$0** (cache-backed, ADR-020).
+- **Result (warm-up 2022-2024, 617 view-day pairs):** the calibration is now **monotonic & meaningful** —
+  hit-rate rises with conviction (46.7% base → 49% → 55.6% @0.50 → 66.7% @0.55-0.64 → 72.7% @0.65+);
+  calibrated range 0.42-0.73; Brier 0.327→0.245. **Headline finding:** the LLM's raw directional calls have
+  ~no aggregate edge (46.7% hit, below coin flip), but the COMPUTED conviction successfully sorts them (high
+  conviction → 55-72% hit) — i.e. the spec §7.3 "conviction is math, not the LLM's self-report" contribution
+  works. `tau_enter=0.60` is now validated (trades 39 view-days @66.7%), vindicating the ADR-018 prior once
+  the label was de-polluted.
+- **Reason:** Calibrating P(directional view correct | z) is what the entry threshold actually needs;
+  counting "no bet" as a miss conflated abstention with error and made the calibrated scale unusable. The
+  re-run is free (cache), so the better label has no cost.
+- **Rejected alternatives:** keep the executed-action label + just lower `tau_enter` to ~0.40 (thresholds a
+  polluted number; non-monotonic; only 3 days of headroom above 0.50); change the memory reward too
+  (different purpose — memory records the action taken, not a hypothetical view); include `target==0` days
+  as a third class (no directional outcome to grade).
+- **Consequences:** `make check` green (107 unit + e2e). `target_direction` now in the trace (also enriches
+  the Step-6 report). The frozen `results/calibrator.pkl` + warmed `data/AAPL_memory/` reflect the new label.
+  Open items for the threshold freeze: pick `tau_enter` 0.50 (more active) vs 0.60 (selective); note
+  `tau_exit=0.40` is below the calibrated floor (0.42) so conviction-decay exits never fire (thesis-only
+  exits). In-sample only — the 2025-2026 test is the generalization check.
+
+## ADR-024 · Backtest fee is COMMISSION-ONLY (fee_bps 7.5 → 1.0); spread/slippage is execution, not strategy
+- **Date:** 2026-06-25
+- **Status:** accepted (revises the 7.5 default from ADR-012)
+- **Decision:** `config.fee_bps` lowered from **7.5 → 1.0 bp** per position change. Rationale: the strategy
+  backtest should charge only the **unavoidable commission** (~1 bp institutional equity commission,
+  ≈ $0.01–0.02/share on a ~$200 stock). **Bid-ask spread and slippage/market-impact are execution/impact
+  effects** — they depend on HOW an order is worked (timing, size, venue), belong in a separate execution
+  model, and are not a property of the daily target the strategy emits. Conflating them into the strategy
+  fee penalizes the *signal* for an *execution* cost. The fee MECHANISM is unchanged (ADR-012): charged only
+  on a position change, `(fee_bps/1e4)·|Δnotional|`, a flip crosses zero → double.
+- **Reason:** Clean separation of concerns — the backtest measures the policy's gross edge net of the cost
+  it actually controls (commission); execution quality (spread/slippage) is a distinct, separately-modeled
+  question. Keeping a small non-zero commission (vs $0 retail) still gives turnover an honest price, so the
+  churn signal isn't erased.
+- **Rejected alternatives:** keep 7.5 bps (bundles ~6.5 bp of spread/slippage the strategy doesn't control —
+  punishes the signal for execution); 0 bps retail commission-free (erases turnover cost entirely — the
+  churn problem would look free, which is misleading); 0.5 bp (defensible low-commission, but 1 bp is the
+  more standard institutional figure). Spread/slippage are best added later as an explicit **execution
+  sensitivity** in S62 (e.g. impact in {0, 5, 10} bp) so their effect is shown, not silently bundled.
+- **Consequences:** `make check` green (107 unit + e2e) — the fee test asserts the flip=2×open RATIO, which
+  is rate-independent, so nothing broke. The next backtest will show a much smaller fee drag (the first run's
+  $59.7k @ 7.5bp → ~$8k @ 1bp on the same 80 trades) — note this REVEALS that the prior "40% of gross eaten
+  by fees" was largely a spread/slippage assumption, not commission; the turnover is still worth reducing,
+  but its *commission* cost is modest. `fee_bps` remains a config knob; fee/impact sensitivity is a natural
+  S62 robustness axis.
+
+## ADR-023 · A2: FAISS memory persistence (warm-up memory now survives into the test)
+- **Date:** 2026-06-25
+- **Status:** accepted (resolves the ADR-019 deferral)
+- **Decision:** `MemoryStore` gained `save(path)` / `load(path)` so the warmed episodic memory survives
+  across processes: `save` writes the FAISS index (`faiss.write_index`) + a pickle of the `{closed, pending}`
+  Episode lists to `config.memory_path()` (= `data/{ticker}_memory/`, gitignored via `data/*_memory/`);
+  `load` restores them (no-op if absent). Wiring: (1) `collect_warmup_pairs` (S5.1) calls `store.save()` at
+  the end, so `--mode warmup` persists the memory it warmed over 2022-2024; (2) `Backtester.run` does
+  `store.load()` **only when `not config.offline`** — the test warm-starts from disk online, while offline
+  stays hermetic (cold start, independent of any `data/{ticker}_memory` on disk — same gating as the
+  calibrator, ADR-019). Both `closed` (1:1 with index rows) and `pending` (not-yet-closed) episodes are
+  carried, so a window that opened near `warmup_end` can still close point-in-time early in the test.
+- **Reason:** Without this, `--mode warmup` and `--mode backtest` are separate processes, so the in-memory
+  store (ADR-009) was discarded between them — the test always started memory-cold and the "warm the memory"
+  job of the warm-up (1 of its 3 jobs) was never realized. The first live backtest's memory contribution was
+  therefore ~nil and the no-memory ablation would have looked unfairly similar to the real system; this
+  closes that gap so S5.1's warm-up actually warms something that lasts.
+- **Anti-lookahead:** save/load NEVER reset `outcome_closed_t`; `retrieve` still filters
+  `outcome_closed_t <= obs.t`. Warm-up episodes are all from 2022-2024 (the past relative to the 2025-2026
+  test) so retrieving them in-test is legitimate prior experience, not leakage; carried `pending` episodes
+  have `outcome_closed_t=None` → not retrievable until they flush in-test. `test_no_lookahead` +
+  `test_delayed_write_retrievable_only_at_t_plus_1_plus_h` stay green; `check-lookahead` clean.
+- **Rejected alternatives:** JSON for the episodes (Episodes hold `date` objects → pickle is cleaner, same
+  choice as `calibrator.pkl`); persisting only `closed` (would drop boundary `pending` episodes whose window
+  closes in the test); a numpy-cosine store to dodge faiss serialization (faiss `write_index`/`read_index`
+  is the standard, already a dependency); auto-loading offline too (would make `make check` depend on a
+  gitignored artifact — gated to online instead).
+- **Consequences:** `make check` green (107 unit + e2e, +2 memory tests: save→fresh-load→retrieve round-trip,
+  and load-is-noop-when-absent). The S5.1 warm-up's memory is now real; running `--mode warmup` then
+  `--mode backtest` carries the warmed FAISS index into the test. `config.memory_path()` added; `data/*_memory/`
+  gitignored. No feature flips (this hardens F07/F11/F15); the S5.1 DoD's "FAISS persistence deferred" note is
+  now resolved.
+
+## ADR-022 · S5.3 ablations: config-toggle variants over one engine; use_hysteresis + run(write=) wired
+- **Date:** 2026-06-25
+- **Status:** accepted
+- **Decision:** `src/eval/ablation.py` realizes the five ablations + `full` as a dict of **config-toggle
+  overrides** (`ABLATION_VARIANTS`), each applied via `dataclasses.replace` (`make_variant_config`) and run
+  through the SAME `Backtester` loop + frozen calibrator — never a code fork. `run_ablations` runs every
+  variant, stacks the 6 rows + the 3 S5.2 baselines into one `results/ablation_table.{csv,md}`, and writes
+  per-variant curves under `results/curves/`. Three enabling choices: (1) **`use_hysteresis` is now wired**
+  into the PositionManager — when False, the exit bar collapses to `tau_enter` (no asymmetric dead-band),
+  resolving the deferral from ADR-010/011; `stateless` was already handled in `run_one_day`. (2) **Added
+  `Backtester.run(write: bool = True)`** — a variant runs with `write=False` so it reuses the identical
+  think→account→metrics path WITHOUT clobbering the main backtest's `results/` artifacts; this is the
+  minimal seam that makes the loop reusable (ADR-012 already built `_run_accounting` pure for exactly this).
+  (3) The Markdown table is written **manually** (pipe rows) rather than `DataFrame.to_markdown` to avoid
+  adding a `tabulate` dependency.
+- **Reason:** "ablations are toggles, not forks" is the spec's scientific-rigor rule — one engine, one
+  accounting, one flag flipped, so each table row is a clean attribution. Wiring `use_hysteresis` at the
+  PositionManager (where hysteresis lives) keeps the flag changing *behavior at the decision point*, like
+  the other flags change what nodes produce. `write=False` is a backward-compatible toggle, not a refactor.
+- **Rejected alternatives:** collapsing the band via a config transform in `make_variant_config`
+  (`tau_exit:=tau_enter`) instead of a PositionManager flag (hides the semantics outside the manager; the
+  flag belongs where hysteresis is applied); redirecting each variant's `results_dir` to a temp dir to avoid
+  clobber (wasteful — renders 6 throwaway charts; `write=False` is cleaner); adding `tabulate` for one MD
+  table (unnecessary heavy dep); running the ablation test over the full ~45-session window (6 variants ×
+  full backtest ≈ minutes — used a ~6-session window where each obs still carries full history ≤ t, ~11s).
+- **SCOPE (stretch experiments deferred):** the S5.3-amendment experiments — `risk_off` veto
+  persistence/size-down, `min_holding_days` / dead-band turnover control, shorts-on/off + warm-up
+  short-expectancy — are NOT built here; per the amendment they are stretch rows that must not block F14.
+  The config knobs + logic are a follow-up.
+- **Consequences:** `make check` green (105 unit + e2e); F14 → `passing`. `--mode ablation` produces the
+  comparison table + per-variant curves; the AV-sentiment row is the one to beat. Variants reuse the LLM
+  cache (ADR-020) + the frozen calibrator (ADR-019), so the live ablation suite is ~free after the main
+  backtest has warmed the cache. S6 reporting reads `ablation_table.*` unchanged.
+
+## ADR-021 · S5.2 baselines: single-agent driven directly, all baselines share the Step-4 loop
+- **Date:** 2026-06-25
+- **Status:** accepted
+- **Decision:** `src/eval/baselines.py` builds the three yardsticks, each reduced to a per-day `targets`
+  list pushed through the SAME `Backtester._run_accounting` dollar loop + `compute_metrics` (one shared
+  `_run_targets` helper), so only the decision rule varies and any gap is attributable to the protocol, not
+  the accounting. Non-obvious choices: (1) **Single-agent (NewsAgent-only) is driven DIRECTLY** — loop the
+  days, call `NewsAgent.run(obs, flat)`, trade `sign(news.signal)` — rather than running the LangGraph with
+  flags. The plan said "run the engine with macro/technical/memory/debate bypassed", but there is no
+  `use_technical` flag and the `use_debate=False` fallback stance aggregates news AND technical, so it could
+  not yield a *news-only* decision; driving the agent directly is the faithful, simpler realization (still
+  one cached LLM call/day, stateless daily classifier). (2) **Buy & hold also goes through the shared loop**
+  (`targets = [+1]*n`), so it is **t+1-executed** (flat session 0, one entry fee) — it differs from the
+  Step-4 chart's day-0 `C0·P[t]/P[0]` reference line by a 1-session lag + one fee, ON PURPOSE: same t+1
+  treatment as the strategy makes the table comparison fair (the chart keeps its own reference line). (3)
+  **AV-sentiment** = mean `av_sentiment` over the gate's relevance-filtered AAPL news ≤ t → `sign` → target
+  (`-1` only if `allow_short`); the AV score is the **baseline-to-beat, never the system's signal**
+  (security-rules). (4) `run_baselines` emits the **corr(LLM_sentiment, AV_score)** diagnostic (evidence the
+  NewsAgent is not echoing AV). (5) Reusing the "protected" `_run_accounting` is the intended reuse — ADR-012
+  built it as a pure function precisely so baselines/ablations share the exact accounting.
+- **Reason:** Sharing one accounting path is the whole point of a fair baseline; direct NewsAgent drive
+  avoids inventing a `use_technical` flag the plan never specified (YAGNI) while delivering the exact
+  "news-only" semantics the baseline needs.
+- **Rejected alternatives:** adding a `use_technical` flag + routing single-agent through the graph (more
+  surface, not needed); buy&hold as the fee-free `C0·P[t]/P[0]` line in the table (inconsistent t+1 vs the
+  strategy — kept only as the chart reference); using AV score as a system input (launders AV's alpha);
+  per-baseline standalone tests (3× redundant `get_observation` loops → 150s suite; a module-scoped
+  `run_baselines` fixture computes them once → ~67s).
+- **Consequences:** `make check` green (99 unit + e2e); F13 → `passing`. `results/curves/baseline_*.csv`
+  written; the metric rows + the corr diagnostic are folded into the S5.3 `ablation_table`. The baselines
+  reuse the LLM cache (ADR-020), so the live single-agent baseline is ~free after the main backtest has run
+  the same NewsAgent prompts/dates. Suite is ~30s slower (the `get_observation` gate over the window); a
+  gate-level memoization is a possible future perf win, out of scope here.
+
+## ADR-020 · Persistent LLM cache (prompt-hash keyed) — reruns/ablations cost no API calls
+- **Date:** 2026-06-25
+- **Status:** accepted
+- **Decision:** The spec/plan assumed an LLM cache ("reruns are free, cached by (ticker, date, agent)")
+  but it was **never implemented** — `config.llm_cache_path()` was defined and referenced nowhere, so
+  every live run (warm-up, backtest, each ablation, the h-sweep) paid full API price and took ~1h. Built it
+  at the single model seam so no agent changes: `make_llm` now wraps the online backbone (both OpenRouter
+  and Groq branches) in `_CachingLLM` when `config.use_llm_cache` (default True; offline/MockLLM is
+  untouched). **Key = sha256(rendered prompt messages + schema name + temperature).** Keying on the *exact
+  rendered prompt* is the crux: it already encodes ticker/date/news/upstream-signals AND the prompt
+  template text, so (a) a hit can only return the response for that identical point-in-time input (no
+  leakage — the cache rule in llm-and-prompts.md), and (b) changing a prompt — e.g. this session's Gate-A
+  debate prompt (ADR-016) — produces a different hash and MISSES, never replaying a stale answer.
+  Temperature is in the key so the DebateAgent's `run()` (temp 0) and `sample()` (temp>0) don't collide.
+  Per key we store an **ordered list** replayed in call order, so the K self-consistency samples (same
+  prompt, K varied draws) are cached and reproduced faithfully — making conviction reproducible AND free on
+  reruns. Storage is **append-only JSONL** at `data/{ticker}_llm_cache.jsonl` (O(1) writes, crash-safe,
+  gitignored); a fresh process loads it and replays. Added `config.use_llm_cache`; `llm_cache_path()` →
+  `.jsonl`; `.gitignore` gains `data/*.jsonl`.
+- **Reason:** The dollar amounts are small (~$8 total across M5/M6) but each live run is ~1 hour and the
+  multi-run steps (S53 = 5 ablations, the h-sweep = 4 runs, plus every re-tune iteration) re-pay and
+  re-wait without a cache. Keying by the full prompt is more robust than a literal (ticker, date, agent)
+  tuple: it is automatically per-agent, point-in-time, AND prompt-versioned, so correctness (no stale
+  debate output after the prompt fix) falls out of the key design rather than needing manual invalidation.
+- **Why not reuse the existing `logs/` traces (the user's question):** the per-day traces store agent
+  *outputs* but not the *input prompt*, are keyed by date for one whole-pipeline config, omit
+  `target_direction` + the K debate samples, and were written with the OLD prompt/thresholds — so they
+  can't be a safe read-before-call cache. They validated the idea (we already persist agent outputs); the
+  cache productionizes it with proper keying.
+- **Rejected alternatives:** a literal `(ticker, date, agent)` key (misses the prompt-version safety — a
+  changed prompt would replay stale output); caching inside `_StructuredJSON` (entangles cache with the
+  JSON-coercion retry logic); a LangChain global `set_llm_cache` (not prompt+temperature aware, wouldn't
+  handle K-sample ordering); full-file JSON rewrite per call (O(n²) I/O over thousands of calls); within-run
+  dedup of identical prompts (would collapse the K debate samples to one draw — the ordered-list-per-key
+  design is what keeps them distinct). Bootstrapping the cache from `logs/` (skipped — the logs lack the
+  input prompt to rebuild the hash; cache simply populates on the next run).
+- **Consequences:** `make check` green (94 unit + e2e, +5 cache tests covering cold→warm replay, K-sample
+  ordering, prompt-change miss, temperature separation, opt-out flag) — all offline via a fake backbone, no
+  network. The first warm-up (~$1.20) populates 2022-2024 once; the first backtest (~$0.60) populates
+  2025-2026 once; **every subsequent ablation / h-sweep / re-run on those windows is ~free and ~instant.**
+  The previously-aspirational "reruns are free" claims in PLAN.md / spec §6 are now TRUE. Caveat: the cache
+  only helps a window AFTER it has been run once; a NEW window (or a NEW model/prompt) pays full price the
+  first time, as intended.
+
+## ADR-019 · S5.1 conviction calibrator (Layer 3): hit=reward>0, hermetic wiring, FAISS persistence deferred
+- **Date:** 2026-06-23
+- **Status:** accepted
+- **Decision:** Implemented Layer 3 (z → P(correct)) in `src/eval/calibration.py`: a `Calibrator` adapter
+  (sklearn `IsotonicRegression` primary; `LogisticRegression`/Platt fallback when n <
+  `config.calibration_min_isotonic=200`, to avoid isotonic overfitting), `fit_calibrator`,
+  `reliability_diagram` (+ shared `_reliability_stats` → Brier & ECE over `config.calibration_bins`),
+  `WarmupPair`, `collect_warmup_pairs`, `run_warmup_calibration`, and `--mode warmup`. Four non-obvious
+  choices: (1) **`_hit_label` reuses `MemoryStore._reward > 0`** — since reward = sign(action)·(forward−μ),
+  `reward > 0` ⟺ the action's direction agrees with the drift-demeaned forward return, so the hit label is
+  *provably identical* to the memory reward rule (DoD requirement) with zero duplicated math; a flat action
+  (sign 0) → reward 0 → hit 0. (2) **The label uses the executed `decision.new_position`** (same quantity
+  the memory episode stores), not the debate's `target_direction` — keeping "correct" defined one way
+  across memory and calibration. (3) **Calibrator wiring is hermetic:** `build_graph(config, store,
+  calibrator=_AUTOLOAD)` auto-loads `results/calibrator.pkl` ONLY when `not config.offline` and the file
+  exists; offline always uses raw z, so `make check` never depends on a gitignored artifact; warm-up calls
+  `build_graph(..., calibrator=None)` so the (z, hit) pairs are the RAW z the calibrator is fit on. (4) An
+  **unfitted/one-class Calibrator is the identity** (`predict_proba(z)=z`), so the PositionManager degrades
+  gracefully to raw conviction before any calibrator is frozen. `config` gains `calibration_min_isotonic`,
+  `calibration_bins`, and a `calibrator_path()`.
+- **SCOPE DEVIATION (warm-up FAISS persistence deferred):** the S51 plan Outputs list "warm-up-populated
+  FAISS index persisted on disk". This is **not** implemented here — `MemoryStore` is in-memory per process
+  (ADR-009 already deferred disk persistence). Consequence: running `--mode warmup` then a separate
+  `--mode backtest` does NOT carry the warmed memory into the test (the test starts cold). The calibrator
+  IS frozen to disk and carried over (that is F15). To get warm memory into the test, either implement
+  FAISS persistence (faiss.write_index + Episode pickle) as a follow-up, or run warm-up + backtest in one
+  process. Recorded here per follow-the-plan; S51 plan doc + PLAN.md annotated.
+- **Reason:** Reusing `_reward` for the hit label is the DRY-est way to satisfy "identical rule to the
+  memory reward". Hermetic, explicit calibrator wiring keeps offline determinism (the project's test
+  contract) while letting the live backtest auto-use the frozen artifact. Deferring FAISS persistence keeps
+  the substep focused on F15 (the calibrator) — the mapped feature — rather than expanding into a
+  store-persistence feature ADR-009 already scoped out (YAGNI for this substep).
+- **Rejected alternatives:** duplicating the forward-return/μ math in `_hit_label` (divergence risk vs the
+  memory reward); labelling by `target_direction` (two different "correct" definitions); a `use_calibrator`
+  config flag (the `_AUTOLOAD`/None/instance sentinel is more explicit and testable); auto-loading the
+  calibrator offline (would make `make check` depend on a gitignored file); implementing FAISS disk
+  persistence now (out of scope for F15; deferred with this note).
+- **Consequences:** `make check` green (89 unit + e2e, +5 calibration tests); check-lookahead clean (the
+  forward-looking `_hit_label` is the frozen training label, never a day-t input). F15 → `passing`. The
+  LIVE `--mode warmup` over real 2022-2024 data produces `results/{calibrator.pkl, reliability_diagram.png,
+  calibration_report.json, warmup_pairs.csv}`; the next backtest auto-applies the frozen calibrator so
+  `tau_enter=0.60` finally means P(correct)≈0.60. The re-tuned thresholds (ADR-018) should be validated on
+  this same warm-up before the next test run.
+
+## ADR-018 · Re-tuned hysteresis/veto threshold PRIORS (under-investment fix)
+- **Date:** 2026-06-23
+- **Status:** accepted
+- **Decision:** The first full live backtest was **flat 65% of days** (238/366: 152 blocked by the entry
+  bar, 86 by the veto) and underperformed buy & hold (+9.1% vs +23.0%). Diagnosis attributed the flatness
+  to two binding knobs, which are re-tuned in `config.py`: **`tau_enter 0.70 → 0.60`** (only 115/366 days
+  cleared 0.70; the entry bar was the single biggest flatness driver at 152 days), **`tau_flip 0.80 →
+  0.70`** (make long↔short flips reachable now that shorts can be proposed — ADR-016/017), and **`vol_cap
+  0.40 → 0.50`** (0.40 bound on ordinary AAPL vol ~0.30 and forced flat on 24 days, exactly when a short
+  might be wanted). **Kept unchanged:** `tau_exit 0.40`, `macro_risk_cap 0.70` (~never binds — 1 day ever —
+  and is redundant with the `risk_off` regime veto), `disagreement_cap 0.70` (only 10 veto days). Ordering
+  invariant preserved: `tau_exit 0.40 < tau_enter 0.60 < tau_flip 0.70`. Two PositionManager tests that
+  hard-coded conviction/vol values tied to the OLD thresholds were made **config-relative** (derive from
+  `cfg.tau_exit/tau_flip/vol_cap`) so they test behavior, not a number.
+- **Reason:** The system was "too hard to get into, too easy to shake out of, and flattened on ordinary
+  volatility" — a defensive degeneration that traded ~14pp of return for ~20pp less drawdown in a bull
+  market. Lowering `tau_enter` + `tau_flip` together (band 0.20) and raising `vol_cap` directly target the
+  measured flatness drivers while preserving the asymmetric Schmitt-trigger hysteresis.
+- **Rejected alternatives:** lowering `tau_exit` too (would widen the dead-band further but the user chose
+  to keep 0.40); tuning the categorical `risk_off` veto here (it is not a number — deferred to an S5.3
+  persistence/size-down experiment); lowering `macro_risk_cap` (would duplicate the risk_off veto and force
+  MORE flat); leaving thresholds at the spec defaults (the first live run is evidence they were too strict).
+- **Consequences — IMPORTANT (these are PRIORS, not fitted values):** the numbers were set from
+  *diagnosing which knob was binding on the 2025–2026 TEST window* (legitimate debugging), NOT by fitting
+  the test curve. They **must be confirmed and frozen on the 2022–2024 warm-up** (S5.1) alongside the
+  calibrator before the next test run; tuning a threshold to improve the test curve would be look-ahead on
+  the eval set (spec §12.1). Also note `conviction` remains **raw z (uncalibrated)** until S5.1, so these
+  bars do not yet mean true probabilities. `make check` green throughout. PLAN.md Step 5 + S32/S51
+  amendments record the same priors + the freeze-on-warmup discipline.
+
+## ADR-017 · Gate-B: abstention-aware agreement (a flat agent no longer dilutes a lone short)
+- **Date:** 2026-06-23
+- **Status:** accepted
+- **Decision:** Second half of the never-shorts fix (after the ADR-016 prompt change, "Gate A"). The
+  Layer-1 conviction `agreement` was direction-blind AND diluted by abstainers: `agreement = |Σ sᵢcᵢ| /
+  Σ cᵢ` summed confidence over ALL agents in the denominator, so a *flat* agent (`sᵢ=0`, which contributes
+  nothing to the numerator) still inflated the denominator and pushed `agreement` down. Effect: when the
+  TechnicalAgent was confidently short but the NewsAgent abstained (flat), the lone short's `z` was
+  suppressed below `tau_enter` and never opened. Fix (one-line, in `composite_conviction`,
+  `src/eval/calibration.py`): sum the denominator over **directional agents only** —
+  `agreement = |Σ sᵢcᵢ| / Σ_{sᵢ≠0} cᵢ` (guard: no directional agent → 0). A flat vote is now an
+  **abstention** — it neither reinforces nor dilutes. `mean_confidence` is left over ALL agents (the mild
+  abstainer dampening there is intentional and conservative). The numerator is unchanged (flat agents were
+  already 0 there). New unit test: news-flat + technical-short(0.6) now gives `agreement = 1.0` (was
+  0.6/1.1 = 0.545), and with a self-consistent short debate `z ≥ tau_enter`.
+- **Reason:** The dilution was an accidental property of putting abstainers in the denominator, not a
+  deliberate design — an agent with "no view" should not veto a confident peer's directional conviction.
+  This is the structural other half of the short fix: ADR-016 lets the debate *propose* `-1`, ADR-017 lets
+  that `-1` *clear the conviction bar* when it's a genuine minority view. Both are needed for the system to
+  short. Keeping it in the conviction math (not a PositionManager special-case) preserves "direction from
+  the debate, magnitude from math" (spec §7.3).
+- **Rejected alternatives:** weighting agreement by directional *coverage* (`× Σ_{≠0}c / Σc`) — reintroduces
+  the dilution we are removing; making a lone signal auto-max conviction via `mean_confidence` too (drops
+  the conservative dampener with no benefit); lowering `tau_enter` further to force shorts (treats the
+  symptom — the minority view should clear the bar on merit, not by lowering the bar for everything);
+  a PositionManager rule that converts a strong-bearish aggregate into a short (moves the directional
+  decision out of the debate/conviction layer).
+- **Consequences:** `composite_conviction` denominator change only; `make check` green (84 unit + e2e, +1
+  test). The existing all-directional test is unaffected (its denominator was already all-directional). The
+  behavioral lift to short *frequency* is best measured after S5.1 calibration re-scales `z`; the
+  threshold/short-expectancy validation stays a warm-up-only step (S5.1/S5.3). PLAN.md Step 2 + S23 already
+  describe this formula; this ADR records the rationale.
+
+## ADR-016 · Debate prompt decouples SHORT from FLAT (fix the never-shorts degeneration)
+- **Date:** 2026-06-23
+- **Status:** accepted
+- **Decision:** The first full live backtest never opened a short (0 / 366 days) despite
+  `allow_short=True` and a PositionManager that fully supports shorting — the short direction was dying
+  upstream in the DebateAgent. Root cause was the **prompt**, not the code: `DEBATE_SYSTEM` Step 2 framed
+  the bear case as the argument to be "**short/flat**", lumping the two into one bucket, and Step 4 gave no
+  rule for mapping a bearish view onto `target_direction`. Given the LLM's long/flat behavioral prior plus
+  the prompt's continuity bias, every bearish view collapsed to **flat** (close/stay out), never **short**.
+  Fix (prompt-only, no schema change): (1) **Step 1/2 reframed directionally** — Step 1 = "the argument
+  that {ticker} will RISE (be LONG)", Step 2 = "the argument that {ticker} will FALL (be SHORT) — a real
+  downside thesis, NOT merely 'sit out'". (2) **Step 4 now carries an explicit direction-mapping**: `+1`
+  when the bull case dominates, `-1` when the bear case dominates ("a real downside edge is a reason to
+  SHORT; do NOT collapse it into flat out of caution"), `0` ONLY for genuine no-view/too-risky-to-hold —
+  with the line "SHORT and FLAT are different decisions". The continuity/HOLD bias and the
+  `flip-only-on-strong-evidence` rule are unchanged.
+- **Reason:** This is the smallest change that addresses the user's long/short/flat requirement. The
+  never-shorts behavior was ~entirely linguistic (short conflated with flat), so it belongs in the prompt
+  — the A2A contribution is the prompt protocol. The `ResearchStance` schema already exposed
+  `target_direction ∈ {-1,0,1}`; no schema/code change was needed.
+- **Rejected alternatives:** lowering `tau_flip`/`tau_enter` to force shorts (treats a symptom — the model
+  still wasn't *proposing* -1); a code rule that converts a strong-bearish-signal aggregate into a short
+  (moves the directional decision out of the debate, violating "debate decides direction, PositionManager
+  decides sizing/hysteresis"); changing the schema (unnecessary — the field already existed).
+- **Consequences:** Behavioral change is **live-only** — offline `MockLLM` ignores prompt text and cycles
+  canned responses, so `make check` (83 unit + e2e) is green but does NOT exercise the new instruction; a
+  1-day live smoke on a bearish-consensus session is needed to confirm a `-1` now surfaces. Items #2–#4
+  from the diagnosis (directional/undiluted conviction for the minority view, `tau_flip` re-tuning) are
+  deferred and best measured AFTER S5.1 calibration re-scales `z`. The offline fixture still has no short
+  `ResearchStance`, so the offline backtest remains long/flat — to exercise a short end-to-end offline,
+  add a `target_direction:-1` entry to `fixtures/llm_responses.json` (separate task).
+
 ## ADR-015 · OpenRouter backbone (Groq free tier blocked the full run)
 - **Date:** 2026-06-20
 - **Status:** accepted (supersedes the "Groq-only" narrowing in S21/ADR-006)

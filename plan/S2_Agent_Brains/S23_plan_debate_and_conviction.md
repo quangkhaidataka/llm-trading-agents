@@ -47,14 +47,22 @@ from src.schemas import (NewsSignal, MacroSignal, TechnicalSignal, MemoryContext
 DEBATE_SYSTEM = """You moderate a position-management debate for the asset {ticker}. Current
 position {current_position} (-1 short, 0 flat, +1 long); entry thesis: "{active_thesis}";
 held {days_held} sessions. Use ONLY the signals provided (no outside/future knowledge). Work in order:
-  Step 1 - Bull case: the strongest GENUINE argument to be long, citing the signals.
-  Step 2 - Bear case: the strongest GENUINE argument to be short/flat. Steelman both; never strawman.
+  Step 1 - Bull case: the strongest GENUINE argument that {ticker} will RISE (a reason to be LONG).
+  Step 2 - Bear case: the strongest GENUINE argument that {ticker} will FALL (a reason to be SHORT) -
+    a real downside thesis, NOT merely "sit out". Steelman both cases; never strawman.
   Step 3 - Thesis check: is the ORIGINAL entry thesis still valid today? (true/false + why).
-  Step 4 - Recommend action in {{hold, open, close, flip}} and target_direction in {{-1,0,1}}.
+  Step 4 - Decide target_direction in {{-1, 0, +1}}, then action in {{hold, open, close, flip}}:
+      +1 LONG  - the bull case clearly outweighs the bear case;
+      -1 SHORT - the bear case clearly outweighs the bull case (you genuinely expect a FALL). A real
+                 downside edge is a reason to SHORT; do NOT collapse it into flat out of caution.
+       0 FLAT  - ONLY when neither side has an edge (genuine uncertainty) or risk is too high to hold
+                 ANY directional position. Flat means "no view", not "mildly bearish".
+    SHORT and FLAT are different decisions: choose -1 when you expect a decline, 0 only when you don't
+    have a directional view. Then map direction to action given the current position.
 Bias to continuity: if a position is held and its thesis still holds, prefer HOLD unless there is
 clear, specific contradicting evidence; only flip on strong opposing evidence.
 Also return conviction in [0,1] = probability the recommended action is correct over ~5 sessions;
-be honest, not strategic — the final decision number is recomputed downstream from math."""
+be honest, not strategic - the final decision number is recomputed downstream from math."""  # Gate-A: ADR-016
 DEBATE_HUMAN = """Date: {t}
 PortfolioState: position={current_position}, thesis="{active_thesis}", days_held={days_held}
 NewsSignal: {news}
@@ -80,8 +88,8 @@ class DebateAgent(BaseAgent):
     def sample(self, obs: Observation, state: PortfolioState, news: NewsSignal,
                macro: MacroSignal, technical: TechnicalSignal,
                memory: MemoryContext, k: int) -> list[str]:
-        """Invoke the chain k times at temperature>0 (varying evidence order) and return the
-        list of recommended `action`s — the input to self_consistency_conviction."""
+        """Invoke the chain k times at temperature>0 and return the list of recommended `action`s —
+        the input to self_consistency_conviction. (Evidence-order shuffling was rejected — ADR-008.)"""
         ...
 ```
 
@@ -96,7 +104,10 @@ def composite_conviction(signals: list[dict], memory_consistency: float, config:
     """Layer 1 — blend measurable quantities into conviction_raw (0–1), NOT the LLM's self-report.
 
     `signals` = the directional agent outputs, each {direction: -1|0|+1, confidence: 0..1}.
-    Computes: agreement = |Σ sᵢcᵢ| / Σ cᵢ  (guard Σcᵢ==0 → 0),
+    Computes: agreement = |Σ sᵢcᵢ| / Σ_{sᵢ≠0} cᵢ  — ABSTENTION-AWARE (Gate-B fix): the denominator sums
+              confidence over DIRECTIONAL agents only (sᵢ≠0), so a flat vote neither reinforces nor
+              dilutes a confident directional minority → a lone short can clear tau_enter; guard
+              no-directional-agent → 0,
               mean_confidence = mean(cᵢ),
               and folds in memory_consistency (share of retrieved analogs that supported the action).
     Returns w1·agreement + w2·mean_confidence + w3·memory_consistency  (weights from config, Σw=1)."""
@@ -156,3 +167,22 @@ computed, not confessed.
 - [x] **features.json:** F08 → `passing`; F15 (Layer-3 calibration) stays `not_started` until Step 5.
 - [x] **Rules:** LCEL `prompt | llm.with_structured_output(ResearchStance)`; model via `make_llm`; conviction is **MATH, not the LLM self-report** (stance `conviction` is one input only); `temperature=0` for `run`, `config.debate_temperature>0` only in `sample` (config-driven `K`); offline parity; no hardcoded `"AAPL"`; weights/`K`/`alpha`/`beta`/`debate_temperature` in config.
 - [x] **Tracking:** `PROGRESS.md` updated; `ResearchStance` reordered reason-first; ADR-008 records sampling-temperature + hold-first-fixture choices.
+
+## Post-completion amendments (first live run: the system never shorted)
+
+The first full live backtest (2025–2026) never opened a short despite `allow_short=True`. Root cause was
+two stacked filters in THIS sub-step, fixed here without changing the `ResearchStance` schema:
+
+- [x] **Gate A — debate prompt (ADR-016, done):** `DEBATE_SYSTEM` lumped the bear case as "short/flat", so
+  a bearish view collapsed to flat and `target_direction = -1` almost never surfaced. The prompt now makes
+  Step 1/2 directional (RISE→LONG vs FALL→SHORT) and Step 4 maps a dominant bear case to `-1`, reserving
+  `0` for genuine no-view ("SHORT and FLAT are different decisions"). Skeleton above updated to match the
+  shipped prompt. *Behavioral change is **live-only** — MockLLM ignores prompt text — so a 1-day live smoke
+  (bearish-consensus day → `-1`) is the verification, not an offline test.*
+- [x] **Gate B — abstention-aware `agreement` (ADR-017, done):** the old `agreement = |Σ sᵢcᵢ| / Σ cᵢ`
+  let a *flat* (abstaining) agent dilute a confident lone short below `tau_enter`. New formula
+  `|Σ sᵢcᵢ| / Σ_{sᵢ≠0} cᵢ` sums confidence over directional agents only — a flat vote neither reinforces
+  nor dilutes. Implemented in `composite_conviction`; unit test
+  `test_composite_conviction_abstention_does_not_dilute_lone_short` asserts news-flat + technical-short →
+  `agreement = 1.0` (was 0.545) and `z ≥ tau_enter`. `make check` green (84 unit + e2e). *The short
+  frequency lift is best measured after S5.1 calibration re-scales `z`.*

@@ -130,3 +130,24 @@ risk layer from the signal layer that the analysts and memory feed.
   `disagreement_cap`, `allow_short`) in `config.py`; conviction consumed is the **calibrated** P(correct).
 - [x] **Tracking:** PROGRESS.md updated; ADR-010 records the two new veto knobs + flip-blocked→close
   decision; `use_hysteresis` ablation flag deferred to S5 (YAGNI).
+
+## Post-completion amendments (first live run: flat 65% of the time / never shorted)
+
+The first full live backtest was flat 65% of days (152 blocked by the entry bar, 86 by the veto) and never
+shorted. The transition table + skeleton above are UNCHANGED (they reference the symbolic `tau_*`/caps, not
+numbers) — only the **config values** were re-tuned, and one veto behavior is queued as an S5 experiment:
+
+- [x] **Re-tuned threshold PRIORS in `config.py`** (record an ADR with the tuning rationale): `tau_enter
+  0.70→0.60` (the 152-day entry-bar flatness — only 115/366 days cleared 0.70), `tau_flip 0.80→0.70` (make
+  long↔short flips reachable), `vol_cap 0.40→0.50` (0.40 bound on ordinary AAPL vol — 24 vol-vetoes). Kept:
+  `tau_exit 0.40`, `macro_risk_cap`/`disagreement_cap 0.70` (macro_risk cap ~never binds — 1 day — and is
+  redundant with the `risk_off` regime veto). Tests were made config-relative so they track any tuning.
+- [ ] **`risk_off` veto persistence / size-down (deferred to S5 as an ablation):** the `regime == risk_off`
+  veto was the biggest forced-flat driver (52 days) and also ejected positions during recoveries. Experiment:
+  require ≥2 consecutive risk-off sessions to fire, or soften "force flat" → "block new entries / reduce
+  size". Small rule + flag over the same `decide`; measured against the binary veto in S5.3.
+
+> **Validation discipline (non-negotiable):** the values above are **priors set from diagnosing which knob
+> was binding on the 2025–2026 test window** — they MUST be confirmed and **frozen on the 2022–2024 warm-up**
+> (S5.1) before the next test run. Never tune a threshold to improve the test-window curve (look-ahead on the
+> eval set). The `conviction` consumed here also remains **raw z until S5.1 calibration** lands.

@@ -324,9 +324,16 @@ Instead we **compute** conviction from measurable quantities, in three layers. L
 raw score `z`) are this step; Layer 3 (turn `z` into a real probability) is Step 5.
 
 - **Layer 1 — composite from measurable signals.** Blend three observable quantities, not a gut feeling:
-  - *agreement* `= |Σ sᵢcᵢ| / Σ cᵢ` — do the directional agents point the same way? (each casts a vote
-    `sᵢ ∈ {−1,0,+1}` weighted by its confidence `cᵢ`). All-agree → 1.0; conflicting → near 0.
-  - *mean_confidence* `= mean(cᵢ)` — how confident on average.
+  - *agreement* `= |Σ sᵢcᵢ| / Σ_{sᵢ≠0} cᵢ` — **among the agents that actually took a side**, do they
+    point the same way? Each casts a vote `sᵢ ∈ {−1,0,+1}` weighted by its confidence `cᵢ`; the
+    denominator sums confidence over **directional agents only** (`sᵢ≠0`; guard: no directional agent →
+    0). A *flat* vote is an **abstention** — it neither reinforces nor dilutes — so a confident lone short
+    is no longer suppressed by an abstaining peer. This is the **Gate-B fix** (record an ADR when
+    implemented): without it, a technical short while news abstains gave a diluted `z` that never cleared
+    `tau_enter`, which (with the Gate-A prompt collapse) is why the first live backtest never shorted.
+    All-who-voted-agree → 1.0; conflicting → near 0.
+  - *mean_confidence* `= mean(cᵢ)` — how confident on average (over all agents; the mild abstainer
+    dampening here is intentional and conservative).
   - *memory_consistency* `= (#analogs whose stored reward supported the action) / k` — did similar
     past situations actually work out?
   - → `conviction_raw = w1·agreement + w2·mean_confidence + w3·memory_consistency`.
@@ -337,8 +344,9 @@ raw score `z`) are this step; Layer 3 (turn `z` into a real probability) is Step
 - **Combine into raw `z`:** `z = alpha·conviction_raw + beta·conviction_sc`
   *(e.g. 0.5·0.85 + 0.5·0.8 = 0.825)*. This `z` is a 0–1 score, **not yet a probability**.
 - **Layer 3 (Step 5) — calibration.** Learn the mapping `z → P(correct)` from 2022–2024 history (e.g.
-  `z≈0.825` was actually right 74% of the time → conviction `= 0.74`). Only then does `tau_enter = 0.7`
-  truly mean "≥70% real chance of being right." It lives in Step 5 because it needs historical results.
+  `z≈0.825` was actually right 74% of the time → conviction `= 0.74`). Only then does `tau_enter = 0.6`
+  (re-tuned, see Step 5) truly mean "≥60% real chance of being right." It lives in Step 5 because it
+  needs historical results.
 - *Headline:* the LLM supplies only **direction + reasoning**; the decision **number comes from math**.
 
 **Conviction function skeletons** (in `src/eval/calibration.py`; structure + intent only — Layers 1–2
@@ -349,7 +357,10 @@ def composite_conviction(signals: list[dict], memory_consistency: float, config:
     """Layer 1 — blend measurable quantities into conviction_raw (0–1), NOT the LLM's self-report.
 
     `signals` = the directional agent outputs, each {direction: -1|0|+1, confidence: 0..1}.
-    Computes: agreement = |Σ sᵢcᵢ| / Σ cᵢ  (guard Σcᵢ==0 → 0),
+    Computes: agreement = |Σ sᵢcᵢ| / Σ_{sᵢ≠0} cᵢ  — ABSTENTION-AWARE: the denominator sums confidence
+              over DIRECTIONAL agents only (sᵢ≠0), so a flat vote neither reinforces nor dilutes a
+              confident directional minority (Gate-B fix so a lone short can clear tau_enter); guard
+              no-directional-agent → 0,
               mean_confidence = mean(cᵢ),
               and folds in memory_consistency (share of retrieved analogs that supported the action).
     Returns w1·agreement + w2·mean_confidence + w3·memory_consistency  (weights from config, Σw=1)."""
@@ -455,19 +466,25 @@ Human:
 
 ```text
 DebateAgent  ->  ResearchStance(bull_case, bear_case, thesis_still_valid, action, target_direction, conviction)
-(sampled K times at temperature>0 for self-consistency, varying the evidence order between runs)
+(sampled K times at temperature>0 for self-consistency)
 System:
   You moderate a position-management debate for the asset {ticker}. Current position {current_position}
   (-1 short, 0 flat, +1 long); entry thesis: "{active_thesis}"; held {days_held} sessions.
   Use ONLY the signals provided (no outside/future knowledge). Work in order:
-    Step 1 - Bull case: the strongest GENUINE argument to be long, citing the signals.
-    Step 2 - Bear case: the strongest GENUINE argument to be short/flat. Steelman both; never strawman.
+    Step 1 - Bull case: the strongest GENUINE argument that {ticker} will RISE (a reason to be LONG).
+    Step 2 - Bear case: the strongest GENUINE argument that {ticker} will FALL (a reason to be SHORT) -
+      a real downside thesis, NOT merely "sit out". Steelman both cases; never strawman.
     Step 3 - Thesis check: is the ORIGINAL entry thesis still valid today? (true/false + why).
-    Step 4 - Recommend action in {hold, open, close, flip} and target_direction in {-1,0,1}.
+    Step 4 - Decide target_direction in {-1,0,+1}, then action in {hold, open, close, flip}:
+        +1 LONG  if the bull case clearly outweighs the bear;
+        -1 SHORT if the bear clearly outweighs the bull (a real downside edge is a reason to SHORT;
+                 do NOT collapse it into flat out of caution);
+         0 FLAT  only on genuine no-view or too-risky-to-hold. SHORT and FLAT are different decisions.
   Bias to continuity: if a position is held and its thesis still holds, prefer HOLD unless there is
   clear, specific contradicting evidence; only flip on strong opposing evidence.
   Also return conviction in [0,1] = probability the recommended action is correct over ~5 sessions;
   be honest, not strategic — the final decision number is recomputed downstream from math.
+(Gate-A fix that decouples SHORT from FLAT — ADR-016; was "short/flat" lumped into one bear bucket.)
 Human:
   Date: {t}
   PortfolioState: position={current_position}, thesis="{active_thesis}", days_held={days_held}
@@ -780,7 +797,7 @@ reliability diagram. Then we build the comparison scaffolding: the baselines the
 contribution — each just a different `Config`.
 
 #### Why This Step Matters
-This closes the §7.3 conviction loop (so `tau_enter = 0.7` truly means "P(correct) ≈ 70%") and
+This closes the §7.3 conviction loop (so `tau_enter = 0.6` truly means "P(correct) ≈ 60%") and
 pre-loads the memory the test period retrieves from — while never reporting warm-up PnL (a pillar of
 the anti-lookahead story). The baselines and ablations are the scientific core of the write-up: they
 directly answer research questions #1–#3 (does debate help? does memory add alpha? does the
@@ -822,6 +839,43 @@ toggle over the same engine, the comparison is clean and credible.
 - The graph builder (Step 3) conditionally includes/bypasses nodes by feature flag (e.g.
   `use_macro=False` skips MacroAgent + its veto). Buy & hold and AV-sentiment baselines are simple
   vectorized strategies straight from the caches (no LLM). Aggregate into a tidy DataFrame → CSV + MD.
+
+#### First-live-run fixes folded into M5 (under-investment / never-shorts)
+
+The first full live backtest (2025–2026) underperformed buy & hold (+9.1% vs +23.0%) and **never opened a
+short** despite `allow_short=True`. Diagnosis: the system was flat 65% of the time (152 days blocked by the
+entry bar, 86 by the veto) and shorts died in two stacked filters — **Gate A** (the debate prompt lumped
+"short/flat", so a bearish view collapsed to flat) and **Gate B** (the direction-blind `agreement` formula
+diluted a minority short below `tau_enter`). The fixes are folded in here:
+
+- **Gate A — done (ADR-016):** debate prompt decouples SHORT from FLAT (Step 2 template above).
+- **Gate B — abstention-aware `agreement`** (Step 2 Layer-1 above): a flat agent no longer dilutes a
+  confident lone short. Record an ADR when implemented.
+- **Re-tuned threshold PRIORS** (new defaults in `config.py`): `tau_enter 0.70->0.60` (the 152-day
+  entry-bar flatness), `tau_flip 0.80->0.70` (make long<->short flips reachable), `vol_cap 0.40->0.50`
+  (0.40 bound on ordinary AAPL vol). Kept: `tau_exit 0.40`, `macro_risk_cap`/`disagreement_cap 0.70`
+  (the macro_risk cap is ~never binding; redundant with the risk_off regime veto).
+
+> **Validation discipline (non-negotiable).** These threshold values were set from *diagnosing which knob
+> was binding on the 2025–2026 test window* — legitimate debugging — but they are **priors, not fitted
+> values**. They MUST be confirmed and **frozen on the 2022–2024 warm-up** (alongside the calibrator)
+> before the next test run; never tune a threshold to improve the test-window curve (that is look-ahead on
+> the eval set, guiding-principle #1 / spec §12.1).
+
+**New experiments to run as ablations/robustness here (each a config toggle or small rule, no code fork):**
+- **`risk_off` veto persistence / size-down** — the single biggest forced-flat driver (52 days). Require
+  >=2 consecutive risk-off sessions to fire, or soften "force flat" -> "block new entries / reduce size"
+  so it stops ejecting positions during recoveries. (Small rule + flag; measure vs the binary veto.)
+- **Turnover control** — fees ate ~40% of gross P&L (avg hold 3.2 days). Add a minimum-holding-period
+  and/or widen the `tau_enter<->tau_exit` dead-band; also smooth the thesis-invalidation gate (the LLM
+  flipping its own thesis day-to-day, which the taus do not touch).
+- **Short-trade expectancy on warm-up** — before trusting shorts, measure their expectancy on 2022–2024;
+  if there is no edge there, calibration should correctly keep shorts rare (the system working, not failing).
+
+**Verification of the short fix (offline cannot test the prompt — MockLLM ignores prompt text):**
+- A **live 1-day smoke** asserting a bearish-consensus session now yields `target_direction = -1`.
+- Add a `target_direction:-1` `ResearchStance` to `fixtures/llm_responses.json` so the **offline**
+  backtest can represent/account a short end-to-end (tests the plumbing, not the prompt).
 
 ---
 

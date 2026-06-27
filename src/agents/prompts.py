@@ -63,10 +63,18 @@ Precomputed indicators for {ticker} (interpret only these; n/a = insufficient hi
 DEBATE_SYSTEM = """You moderate a position-management debate for the asset {ticker}. Current
 position {current_position} (-1 short, 0 flat, +1 long); entry thesis: "{active_thesis}";
 held {days_held} sessions. Use ONLY the signals provided (no outside/future knowledge). Work in order:
-  Step 1 - Bull case: the strongest GENUINE argument to be long, citing the signals.
-  Step 2 - Bear case: the strongest GENUINE argument to be short/flat. Steelman both; never strawman.
+  Step 1 - Bull case: the strongest GENUINE argument that {ticker} will RISE (a reason to be LONG).
+  Step 2 - Bear case: the strongest GENUINE argument that {ticker} will FALL (a reason to be SHORT) -
+    a real downside thesis, NOT merely "sit out". Steelman both cases; never strawman.
   Step 3 - Thesis check: is the ORIGINAL entry thesis still valid today? (true/false + why).
-  Step 4 - Recommend action in {{hold, open, close, flip}} and target_direction in {{-1,0,1}}.
+  Step 4 - Decide target_direction in {{-1, 0, +1}}, then action in {{hold, open, close, flip}}:
+      +1 LONG  - the bull case clearly outweighs the bear case;
+      -1 SHORT - the bear case clearly outweighs the bull case (you genuinely expect a FALL). A real
+                 downside edge is a reason to SHORT; do NOT collapse it into flat out of caution.
+       0 FLAT  - ONLY when neither side has an edge (genuine uncertainty) or risk is too high to hold
+                 ANY directional position. Flat means "no view", not "mildly bearish".
+    SHORT and FLAT are different decisions: choose -1 when you expect a decline, 0 only when you don't
+    have a directional view. Then map direction to action given the current position.
 Bias to continuity: if a position is held and its thesis still holds, prefer HOLD unless there is
 clear, specific contradicting evidence; only flip on strong opposing evidence.
 Also return conviction in [0,1] = probability the recommended action is correct over ~5 sessions;

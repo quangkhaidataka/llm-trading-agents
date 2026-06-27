@@ -53,12 +53,12 @@ class Config:
     reward_drift_window: int = 60          # trailing sessions for μ (AAPL drift), point-in-time ≤ t
 
     # ── Hysteresis thresholds (on CALIBRATED conviction; tuned §7.2) ─────────
-    tau_enter: float = 0.70
+    tau_enter: float = 0.60                # frozen prior (§7.2); 0.45 was a test-set diagnostic (shorts fire, no edge)
     tau_exit: float = 0.40
-    tau_flip: float = 0.80
+    tau_flip: float = 0.70
 
     # ── Risk veto ───────────────────────────────────────────────────────────
-    vol_cap: float = 0.40                  # annualized realized-vol cap
+    vol_cap: float = 0.50                  # annualized realized-vol cap
     dd_cap: float = -0.15                  # max drawdown floor
     macro_risk_cap: float = 0.70           # force flat above this systematic-risk level
     disagreement_cap: float = 0.70         # force flat when analysts disagree above this
@@ -71,8 +71,14 @@ class Config:
     alpha: float = 0.5                     # blend: conviction_raw
     beta: float = 0.5                      # blend: conviction_sc
 
+    # ── Conviction calibration (Layer 3, S5.1 — fit on 2022-2024 warm-up, then frozen) ─
+    calibration_min_isotonic: int = 200    # < this many (z,hit) pairs → Platt fallback (avoid iso overfit)
+    calibration_bins: int = 10             # reliability-diagram / ECE bins
+
     # ── Backtest ────────────────────────────────────────────────────────────
-    fee_bps: float = 7.5                   # cost per position CHANGE
+    fee_bps: float = 1.0                   # COMMISSION-ONLY per position CHANGE (~1bp institutional equity
+                                           # commission); spread/slippage are execution/impact effects,
+                                           # modeled separately, NOT charged to the strategy backtest (ADR-024)
     allow_short: bool = True
     initial_capital: float = 1_000_000.0   # C0 — the brokerage account opened on day 1
     position_sizing: str = "capped_notional"  # "capped_notional" | "full_compounding" (S5 ablation)
@@ -92,6 +98,9 @@ class Config:
     openrouter_requests_per_second: float = 3.0  # paid → fast; lower if you hit limits
     openrouter_max_retries: int = 6
     llm_parse_retries: int = 4             # re-ask (with a nudge) when a reply isn't valid schema JSON
+    use_llm_cache: bool = True             # cache live structured outputs by prompt hash → free reruns
+    llm_timeout: float = 60.0              # per-call request timeout (s): a stalled call FAILS → retried,
+                                           # so a hung socket can never freeze a long run (ADR-026)
 
     # ── Ablations (Step 5 — one Config toggle over the SAME graph) ───────────
     use_memory: bool = True                # False → MemoryAgent returns empty context
@@ -122,7 +131,14 @@ class Config:
         return os.path.join(self.cache_dir, f"{self.ticker}_prices.parquet")
 
     def llm_cache_path(self) -> str:
-        return os.path.join(self.cache_dir, f"{self.ticker}_llm_cache.json")
+        return os.path.join(self.cache_dir, f"{self.ticker}_llm_cache.jsonl")
+
+    def calibrator_path(self) -> str:
+        return os.path.join(self.results_dir, "calibrator.pkl")
+
+    def memory_path(self) -> str:
+        """Directory holding the persisted FAISS index + episode metadata (warm-up → test carry)."""
+        return os.path.join(self.cache_dir, f"{self.ticker}_memory")
 
 
 # Importable singleton; callers may also build their own Config for ablations.
